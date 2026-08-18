@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: cinepilot
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: 7050
+      - key: NODE_ENV
+        value: production
