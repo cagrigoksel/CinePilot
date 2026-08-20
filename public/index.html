@@ -33,7 +33,7 @@
 
     .container {
       width: 100%;
-      max-width: 580px;
+      max-width: 560px;
       background: var(--card-bg);
       backdrop-filter: blur(20px);
       -webkit-backdrop-filter: blur(20px);
@@ -65,6 +65,12 @@
       border: 1px solid var(--border);
       border-radius: 12px;
       margin-bottom: 8px;
+      transition: border-color 0.2s;
+    }
+    .switch-row.sub-switch {
+      margin-left: 12px;
+      background: rgba(13, 17, 23, 0.3);
+      border-left: 3px solid var(--primary);
     }
     .switch-label { font-size: 0.92rem; font-weight: 600; }
 
@@ -97,7 +103,7 @@
     input:checked + .slider { background-color: var(--primary); }
     input:checked + .slider:before { transform: translateX(20px); }
 
-    /* Custom List Card Builder */
+    /* Custom List Builder */
     .custom-list-box {
       background: rgba(13, 17, 23, 0.6);
       border: 1px dashed rgba(255, 255, 255, 0.15);
@@ -172,7 +178,7 @@
     .form-group { margin-bottom: 12px; }
     label.field-label { display: block; font-weight: 600; font-size: 0.85rem; margin-bottom: 6px; color: var(--text); }
 
-    .btn-container { display: flex; flex-direction: column; gap: 8px; margin-top: 24px; }
+    .btn-container { display: flex; flex-direction: column; gap: 8px; margin-top: 26px; }
 
     .btn {
       width: 100%;
@@ -194,19 +200,6 @@
 
     .btn-secondary { background: rgba(255, 255, 255, 0.08); color: var(--text); }
     .btn-secondary:hover { background: rgba(255, 255, 255, 0.15); }
-
-    .manifest-box {
-      margin-top: 14px;
-      padding: 10px;
-      background: #0d1117;
-      border-radius: 8px;
-      font-family: monospace;
-      font-size: 0.75rem;
-      color: #58a6ff;
-      word-break: break-all;
-      border: 1px solid #30363d;
-      user-select: all;
-    }
   </style>
 </head>
 <body>
@@ -216,7 +209,7 @@
       <h1>CinePilot Studio</h1>
     </div>
 
-    <!-- 1. Küratörlük Listeleri (4 Switch) -->
+    <!-- 1. Küratörlük Listeleri -->
     <div class="section-title">Kataloglar</div>
     
     <div class="switch-row">
@@ -267,7 +260,7 @@
       <div class="list-container" id="customListsContainer"></div>
     </div>
 
-    <!-- 3. Ayarlar & API Anahtarları -->
+    <!-- 3. Ayarlar & Entegrasyonlar -->
     <div class="section-title">Ayarlar</div>
     
     <div class="form-group">
@@ -275,11 +268,46 @@
       <input type="text" id="rpdbKey" placeholder="RPDB API Key (İsteğe bağlı)">
     </div>
 
+    <!-- Letterboxd Username & Dynamic Toggles -->
     <div class="form-group">
       <label class="field-label">Letterboxd Kullanıcı Adı</label>
-      <input type="text" id="letterboxdUser" placeholder="Kullanıcı Adı (İsteğe bağlı)">
+      <input type="text" id="letterboxdUser" placeholder="Letterboxd Kullanıcı Adı (İsteğe bağlı)">
     </div>
 
+    <div id="lbxToggles" style="display: none; margin-bottom: 12px;">
+      <div class="switch-row sub-switch">
+        <span class="switch-label">📌 Letterboxd Watchlist</span>
+        <label class="switch">
+          <input type="checkbox" id="enableLbxWatchlist" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="switch-row sub-switch">
+        <span class="switch-label">🍿 Letterboxd Diary</span>
+        <label class="switch">
+          <input type="checkbox" id="enableLbxDiary" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Trakt Username & Dynamic Toggles -->
+    <div class="form-group">
+      <label class="field-label">Trakt.tv Kullanıcı Adı</label>
+      <input type="text" id="traktUser" placeholder="Trakt Kullanıcı Adı (İsteğe bağlı)">
+    </div>
+
+    <div id="traktToggles" style="display: none; margin-bottom: 12px;">
+      <div class="switch-row sub-switch">
+        <span class="switch-label">📌 Trakt Watchlist</span>
+        <label class="switch">
+          <input type="checkbox" id="enableTraktWatchlist" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Trailers Switch -->
     <div class="switch-row">
       <span class="switch-label">🎬 Trailers</span>
       <label class="switch">
@@ -288,13 +316,11 @@
       </label>
     </div>
 
-    <!-- 4. Yükleme -->
+    <!-- 4. Yükleme ve Kopyalama Butonları -->
     <div class="btn-container">
       <a href="#" id="installBtn" class="btn btn-primary">🚀 Stremio'ya Yükle</a>
       <button type="button" id="copyBtn" class="btn btn-secondary">📋 Manifest Linkini Kopyala</button>
     </div>
-
-    <div class="manifest-box" id="manifestUrl">...</div>
   </div>
 
   <script>
@@ -362,7 +388,17 @@
       const enableTop250 = document.getElementById('enableTop250').checked;
       const enableTrailers = document.getElementById('enableTrailers').checked;
       const rpdbKey = document.getElementById('rpdbKey').value.trim();
+
       const letterboxdUser = document.getElementById('letterboxdUser').value.trim();
+      const enableLbxWatchlist = document.getElementById('enableLbxWatchlist').checked;
+      const enableLbxDiary = document.getElementById('enableLbxDiary').checked;
+
+      const traktUser = document.getElementById('traktUser').value.trim();
+      const enableTraktWatchlist = document.getElementById('enableTraktWatchlist').checked;
+
+      // Toggle dynamic sub-switch visibility
+      document.getElementById('lbxToggles').style.display = letterboxdUser ? 'block' : 'none';
+      document.getElementById('traktToggles').style.display = traktUser ? 'block' : 'none';
 
       const configObj = {
         enableTrendingMovies,
@@ -372,6 +408,10 @@
         enableTrailers,
         rpdbKey,
         letterboxdUser,
+        enableLbxWatchlist,
+        enableLbxDiary,
+        traktUser,
+        enableTraktWatchlist,
         customLists
       };
 
@@ -382,7 +422,7 @@
       const stremioProtocolUrl = `stremio://${manifestUrl.replace(/^https?:\/\//, '')}`;
 
       document.getElementById('installBtn').href = stremioProtocolUrl;
-      document.getElementById('manifestUrl').innerText = manifestUrl;
+      window.lastGeneratedManifestUrl = manifestUrl;
       return manifestUrl;
     }
 

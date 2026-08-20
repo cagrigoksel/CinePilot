@@ -9,6 +9,7 @@ const app = express();
 const PORT = process.env.PORT || 7050;
 
 const TMDB_API_KEY = 'caad8d4dace6ad77f0e22f5b746d5a20';
+const TRAKT_CLIENT_ID = '9372d829dc7a9b0c7a7efb0c95029be85a198c6aa5b2fb8217bb4c3a9d9cf9e4';
 
 // Load Curated Lists
 const curatedData = JSON.parse(fs.readFileSync(path.join(__dirname, 'curated_lists.json'), 'utf8'));
@@ -62,6 +63,11 @@ function parseConfig(configStr) {
     enableTrailers: true,
     rpdbKey: '',
     letterboxdUser: '',
+    enableLbxWatchlist: true,
+    enableLbxDiary: true,
+    traktUser: '',
+    enableTraktWatchlist: true,
+    enableTraktCollection: false,
     customLists: []
   };
 
@@ -214,7 +220,7 @@ function getManifest(config) {
     catalogs.push({
       id: 'trending_movies',
       type: 'movie',
-      name: `🔥 Haftalık Trend Filmler`,
+      name: `🔥 Trending Movies`,
       extra: [
         { name: 'search', isRequired: false },
         { name: 'genre', isRequired: false, options: PURE_MOVIE_GENRES },
@@ -228,7 +234,7 @@ function getManifest(config) {
     catalogs.push({
       id: 'trending_series',
       type: 'series',
-      name: `📺 Haftalık Trend Diziler`,
+      name: `📺 Trending Series`,
       extra: [
         { name: 'search', isRequired: false },
         { name: 'genre', isRequired: false, options: PURE_SERIES_GENRES },
@@ -242,22 +248,22 @@ function getManifest(config) {
     catalogs.push({
       id: 'oscar_collection',
       type: 'movie',
-      name: `✨ Oscar Ödüllü Filmler`,
+      name: `✨ Oscar Collection`,
       extra: [{ name: 'genre', isRequired: false, options: PURE_MOVIE_GENRES }, { name: 'skip', isRequired: false }]
     });
   }
 
-  // 4. IMDb & Letterboxd Top 250
+  // 4. IMDb Top 250
   if (config.enableTop250 !== false) {
     catalogs.push({
       id: 'top250_collection',
       type: 'movie',
-      name: `🏆 IMDb Top 250`,
+      name: `🏆 Top 250 Movies`,
       extra: [{ name: 'genre', isRequired: false, options: PURE_MOVIE_GENRES }, { name: 'skip', isRequired: false }]
     });
   }
 
-  // 5. User Defined Custom Lists (Letterboxd / Trakt)
+  // 5. User Defined Custom Lists (Letterboxd / Trakt / IMDb)
   if (Array.isArray(config.customLists)) {
     config.customLists.forEach((list, idx) => {
       const type = list.type === 'series' ? 'series' : 'movie';
@@ -274,28 +280,53 @@ function getManifest(config) {
     });
   }
 
-  // 6. Optional Personal Letterboxd
+  // 6. Letterboxd Watchlist & Diary (with individual switches)
   if (config.letterboxdUser && config.letterboxdUser.trim() !== '') {
     const user = config.letterboxdUser.trim();
-    catalogs.push({
-      id: 'my_watchlist',
-      type: 'movie',
-      name: `📌 İzleme Listem (${user})`,
-      extra: [{ name: 'genre', isRequired: false, options: PURE_MOVIE_GENRES }, { name: 'skip', isRequired: false }]
-    });
-    catalogs.push({
-      id: 'my_diary',
-      type: 'movie',
-      name: `🍿 Son İzlediklerim (${user})`,
-      extra: [{ name: 'genre', isRequired: false, options: PURE_MOVIE_GENRES }, { name: 'skip', isRequired: false }]
-    });
+    if (config.enableLbxWatchlist !== false) {
+      catalogs.push({
+        id: 'my_watchlist',
+        type: 'movie',
+        name: `📌 Watchlist (${user})`,
+        extra: [{ name: 'genre', isRequired: false, options: PURE_MOVIE_GENRES }, { name: 'skip', isRequired: false }]
+      });
+    }
+    if (config.enableLbxDiary !== false) {
+      catalogs.push({
+        id: 'my_diary',
+        type: 'movie',
+        name: `🍿 Diary (${user})`,
+        extra: [{ name: 'genre', isRequired: false, options: PURE_MOVIE_GENRES }, { name: 'skip', isRequired: false }]
+      });
+    }
+  }
+
+  // 7. Trakt Watchlist & Collection (with individual switches)
+  if (config.traktUser && config.traktUser.trim() !== '') {
+    const tUser = config.traktUser.trim();
+    if (config.enableTraktWatchlist !== false) {
+      catalogs.push({
+        id: 'trakt_watchlist',
+        type: 'movie',
+        name: `📌 Trakt Watchlist (${tUser})`,
+        extra: [{ name: 'genre', isRequired: false, options: PURE_MOVIE_GENRES }, { name: 'skip', isRequired: false }]
+      });
+    }
+    if (config.enableTraktCollection) {
+      catalogs.push({
+        id: 'trakt_collection',
+        type: 'movie',
+        name: `🗂️ Trakt Collection (${tUser})`,
+        extra: [{ name: 'genre', isRequired: false, options: PURE_MOVIE_GENRES }, { name: 'skip', isRequired: false }]
+      });
+    }
   }
 
   return {
     id: 'community.cinepilot.studio',
     name: 'CinePilot Studio',
-    version: '5.1.0',
-    description: 'Modüler Stremio Katalog Oluşturucu, Trendler, Oscar, Top 250, Özel Letterboxd Listeleri ve Fragmanlar.',
+    version: '5.2.0',
+    description: 'Modüler Stremio Katalog Oluşturucu, Trendler, Oscar, Top 250, Özel Letterboxd & Trakt Listeleri ve Fragmanlar.',
     resources: ['catalog', 'meta', 'stream'],
     types: ['movie', 'series'],
     catalogs: catalogs,
@@ -482,7 +513,7 @@ async function resolveImdbList(imdbIds, type = 'movie', rpdbKey = '') {
   return results.filter(Boolean);
 }
 
-// Multi-page TMDB Weekly Trending Fetcher (100+ items with Genre Support)
+// Multi-page TMDB Weekly Trending Fetcher
 async function fetchTrending100(type = 'movie', rpdbKey = '', genreName = null) {
   const endpointType = type === 'series' ? 'tv' : 'movie';
   const genreId = genreName && genreName !== 'Tümü' ? TMDB_GENRE_MAP[genreName] : null;
@@ -618,7 +649,7 @@ app.get([
 
     // 3. OSCAR ÖDÜLLÜ FİLMLER (~96)
     else if (id === 'oscar_collection') {
-      const cacheKey = `full_oscar_v10_${config.rpdbKey || 'no_rpdb'}`;
+      const cacheKey = `full_oscar_v11_${config.rpdbKey || 'no_rpdb'}`;
       metas = getCache(cacheKey);
       if (!metas) {
         metas = await resolveImdbList(curatedData.oscar, 'movie', config.rpdbKey);
@@ -628,7 +659,7 @@ app.get([
 
     // 4. TOP 250 MOVIES (~98)
     else if (id === 'top250_collection') {
-      const cacheKey = `full_top250_v10_${config.rpdbKey || 'no_rpdb'}`;
+      const cacheKey = `full_top250_v11_${config.rpdbKey || 'no_rpdb'}`;
       metas = getCache(cacheKey);
       if (!metas) {
         metas = await resolveImdbList(curatedData.top250, 'movie', config.rpdbKey);
@@ -670,6 +701,17 @@ app.get([
       metas = getCache(cacheKey);
       if (!metas) {
         const scraped = await scrapeUniversalList(`https://letterboxd.com/${config.letterboxdUser}/films/`);
+        metas = await resolveScrapedListToMetas(scraped, 'movie', config.rpdbKey);
+        setCache(cacheKey, metas, 30 * 60 * 1000);
+      }
+    }
+
+    // 8. TRAKT WATCHLIST
+    else if (id === 'trakt_watchlist' && config.traktUser) {
+      const cacheKey = `trakt_wl_${config.traktUser}_${config.rpdbKey || 'no_rpdb'}`;
+      metas = getCache(cacheKey);
+      if (!metas) {
+        const scraped = await scrapeUniversalList(`https://trakt.tv/users/${config.traktUser}/watchlist`);
         metas = await resolveScrapedListToMetas(scraped, 'movie', config.rpdbKey);
         setCache(cacheKey, metas, 30 * 60 * 1000);
       }
@@ -722,7 +764,7 @@ app.get(['/meta/:type/:id.json', '/:config/meta/:type/:id.json'], async (req, re
     const cast = (tmdbData.credits?.cast || []).slice(0, 5).map(c => c.name);
     const director = (tmdbData.credits?.crew || []).filter(c => c.job === 'Director').map(c => c.name);
 
-    // Build interactive videos (episodes) array with authentic thumbnails
+    // Build interactive videos (episodes) array
     const videos = [];
     if (type === 'series' && tmdbData.seasons && tmdbIdNum) {
       const seasonPromises = tmdbData.seasons.map(s => {
@@ -836,7 +878,7 @@ app.get(['/stream/:type/:id.json', '/:config/stream/:type/:id.json'], async (req
 
 app.listen(PORT, '0.0.0.0', () => {
   const ip = getLocalIp();
-  console.log(`🚀 CinePilot Studio v5.1.0 running on http://127.0.0.1:${PORT}`);
+  console.log(`🚀 CinePilot Studio v5.2.0 running on http://127.0.0.1:${PORT}`);
   console.log(`📡 Local Network URL: http://${ip}:${PORT}`);
   console.log(`⚙️ Web Configurator: http://127.0.0.1:${PORT}/configure`);
 });
