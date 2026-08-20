@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CinePilot Studio</title>
+  <title>CinePilot Studio — Community Edition</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -16,6 +16,7 @@
       --primary-hover: #9373f9;
       --accent-green: #00d26a;
       --accent-danger: #f85149;
+      --accent-patreon: #ff424d;
       --text: #f0f6fc;
       --text-muted: #8b949e;
     }
@@ -52,7 +53,18 @@
       margin-bottom: 24px;
     }
 
-    .header-title { font-size: 2.1rem; font-weight: 800; letter-spacing: -0.5px; }
+    .header-title { font-size: 2rem; font-weight: 800; letter-spacing: -0.5px; display: flex; align-items: center; gap: 8px; }
+    .badge-ce {
+      font-size: 0.65rem;
+      font-weight: 700;
+      background: rgba(122, 90, 248, 0.25);
+      color: var(--primary-hover);
+      border: 1px solid var(--primary);
+      padding: 3px 8px;
+      border-radius: 20px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
 
     .lang-select {
       width: auto !important;
@@ -240,13 +252,41 @@
 
     .btn-secondary { background: rgba(255, 255, 255, 0.08); color: var(--text); }
     .btn-secondary:hover { background: rgba(255, 255, 255, 0.15); }
+
+    .btn-patreon {
+      background: rgba(255, 66, 77, 0.15);
+      border: 1px solid var(--accent-patreon);
+      color: #fff;
+      margin-top: 6px;
+    }
+    .btn-patreon:hover {
+      background: var(--accent-patreon);
+      color: #fff;
+      transform: translateY(-2px);
+    }
+
+    .footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+    }
+    .footer a { color: var(--text-muted); text-decoration: none; transition: color 0.2s; }
+    .footer a:hover { color: #fff; text-decoration: underline; }
   </style>
 </head>
 <body>
 
   <div class="container">
     <div class="top-bar">
-      <div class="header-title" id="tTitle">CinePilot Studio</div>
+      <div class="header-title">
+        <span id="tTitle">CinePilot</span>
+        <span class="badge-ce">Community v6.2</span>
+      </div>
       <select id="langSelect" class="lang-select">
         <option value="tr">🇹🇷 Türkçe</option>
         <option value="en" selected>🇺🇸 English</option>
@@ -260,7 +300,7 @@
       </select>
     </div>
 
-    <!-- 1. Kataloglar -->
+    <!-- 1. Catalogs -->
     <div class="section-title" id="tCatalogsTitle">Catalogs</div>
     
     <div class="switch-row">
@@ -295,7 +335,7 @@
       </label>
     </div>
 
-    <!-- 2. Özel Liste Ekleme -->
+    <!-- 2. Custom List Addition -->
     <div class="section-title" id="tCustomListTitle">Add Custom List</div>
     <div class="custom-list-box">
       <div class="input-grid">
@@ -312,7 +352,7 @@
       <div class="list-container" id="customListsContainer"></div>
     </div>
 
-    <!-- 3. Ayarlar & API Anahtarları -->
+    <!-- 3. Settings & API Keys -->
     <div class="section-title" id="tSettingsTitle">Settings</div>
     
     <div class="form-group">
@@ -352,17 +392,24 @@
       </label>
     </div>
 
-    <!-- 4. Yükleme ve Kopyalama Butonları -->
+    <!-- 4. Install, Copy & Support Buttons -->
     <div class="btn-container">
       <a href="#" id="installBtn" class="btn btn-primary">🚀 Install to Stremio</a>
       <button type="button" id="copyBtn" class="btn btn-secondary">📋 Copy Manifest Link</button>
+      <a href="https://www.patreon.com/cagrigoksel" target="_blank" id="patreonBtn" class="btn btn-patreon">☕ Support Project on Patreon</a>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <span>Open Source Community Project</span>
+      <a href="https://github.com/cagrigoksel/CinePilot" target="_blank">⭐ GitHub Repository</a>
     </div>
   </div>
 
   <script>
     const I18N = {
       tr: {
-        title: 'CinePilot Studio',
+        title: 'CinePilot',
         catalogsTitle: 'Kataloglar',
         trendingMovies: '🔥 Haftalık Trend Filmler',
         trendingSeries: '📺 Haftalık Trend Diziler',
@@ -384,6 +431,7 @@
         trailers: '🎬 Fragmanlar (Trailers)',
         installBtn: '🚀 Stremio\'ya Yükle',
         copyBtn: '📋 Manifest Linkini Kopyala',
+        patreonBtn: '☕ Projeyi Patreon\'da Destekle',
         copied: '✅ Kopyalandı!',
         noLists: 'Henüz özel bir liste eklenmedi.',
         validating: '⏳ Liste Kontrol Ediliyor...',
@@ -392,7 +440,7 @@
         enterUrlError: '⚠️ Lütfen geçerli bir bağlantı girin.'
       },
       en: {
-        title: 'CinePilot Studio',
+        title: 'CinePilot',
         catalogsTitle: 'Catalogs',
         trendingMovies: '🔥 Trending Movies',
         trendingSeries: '📺 Trending Series',
@@ -414,6 +462,7 @@
         trailers: '🎬 Official Trailers',
         installBtn: '🚀 Install to Stremio',
         copyBtn: '📋 Copy Manifest Link',
+        patreonBtn: '☕ Support Project on Patreon',
         copied: '✅ Copied!',
         noLists: 'No custom lists added yet.',
         validating: '⏳ Verifying List...',
@@ -422,7 +471,7 @@
         enterUrlError: '⚠️ Please enter a valid URL.'
       },
       es: {
-        title: 'CinePilot Studio',
+        title: 'CinePilot',
         catalogsTitle: 'Catálogos',
         trendingMovies: '🔥 Películas Populares',
         trendingSeries: '📺 Series Populares',
@@ -444,6 +493,7 @@
         trailers: '🎬 Tráilers Oficiales',
         installBtn: '🚀 Instalar en Stremio',
         copyBtn: '📋 Copiar Enlace del Manifiesto',
+        patreonBtn: '☕ Apoyar en Patreon',
         copied: '✅ ¡Copiado!',
         noLists: 'Aún no has añadido listas personalizadas.',
         validating: '⏳ Verificando...',
@@ -452,7 +502,7 @@
         enterUrlError: '⚠️ Por favor ingresa un enlace válido.'
       },
       de: {
-        title: 'CinePilot Studio',
+        title: 'CinePilot',
         catalogsTitle: 'Kataloge',
         trendingMovies: '🔥 Beliebte Filme',
         trendingSeries: '📺 Beliebte Serien',
@@ -474,6 +524,7 @@
         trailers: '🎬 Offizielle Trailer',
         installBtn: '🚀 In Stremio installieren',
         copyBtn: '📋 Manifest-Link kopieren',
+        patreonBtn: '☕ Auf Patreon unterstützen',
         copied: '✅ Kopiert!',
         noLists: 'Noch keine eigenen Listen hinzugefügt.',
         validating: '⏳ Überprüfe...',
@@ -482,7 +533,7 @@
         enterUrlError: '⚠️ Bitte gib einen gültigen Link ein.'
       },
       fr: {
-        title: 'CinePilot Studio',
+        title: 'CinePilot',
         catalogsTitle: 'Catalogues',
         trendingMovies: '🔥 Films Tendances',
         trendingSeries: '📺 Séries Tendances',
@@ -504,6 +555,7 @@
         trailers: '🎬 Bandes-annonces officielles',
         installBtn: '🚀 Installer sur Stremio',
         copyBtn: '📋 Copier le lien du manifeste',
+        patreonBtn: '☕ Soutenir sur Patreon',
         copied: '✅ Copié !',
         noLists: 'Aucune liste personnalisée ajoutée.',
         validating: '⏳ Vérification...',
@@ -512,7 +564,7 @@
         enterUrlError: '⚠️ Veuillez saisir un lien valide.'
       },
       it: {
-        title: 'CinePilot Studio',
+        title: 'CinePilot',
         catalogsTitle: 'Cataloghi',
         trendingMovies: '🔥 Film di Tendenza',
         trendingSeries: '📺 Serie di Tendenza',
@@ -534,6 +586,7 @@
         trailers: '🎬 Trailer Ufficiali',
         installBtn: '🚀 Installa su Stremio',
         copyBtn: '📋 Copia Link Manifesto',
+        patreonBtn: '☕ Supporta su Patreon',
         copied: '✅ Copiato!',
         noLists: 'Nessuna lista personalizzata aggiunta.',
         validating: '⏳ Verifica in corso...',
@@ -542,7 +595,7 @@
         enterUrlError: '⚠️ Inserisci un link valido.'
       },
       ja: {
-        title: 'CinePilot Studio',
+        title: 'CinePilot',
         catalogsTitle: 'カタログ',
         trendingMovies: '🔥 トレンド映画',
         trendingSeries: '📺 トレンドドラマ',
@@ -564,6 +617,7 @@
         trailers: '🎬 公式予告編',
         installBtn: '🚀 Stremio にインストール',
         copyBtn: '📋 マニフェストリンクをコピー',
+        patreonBtn: '☕ Patreon で応援する',
         copied: '✅ コピーしました！',
         noLists: 'カスタムリストはまだありません。',
         validating: '⏳ リストを確認中...',
@@ -572,7 +626,7 @@
         enterUrlError: '⚠️ 有効なリンクを入力してください。'
       },
       ko: {
-        title: 'CinePilot Studio',
+        title: 'CinePilot',
         catalogsTitle: '카탈로그',
         trendingMovies: '🔥 주간 인기 영화',
         trendingSeries: '📺 주간 인기 시리즈',
@@ -594,6 +648,7 @@
         trailers: '🎬 공식 예고편',
         installBtn: '🚀 Stremio에 설치',
         copyBtn: '📋 매니페스트 링크 복사',
+        patreonBtn: '☕ Patreon에서 후원하기',
         copied: '✅ 복사 완료!',
         noLists: '추가된 맞춤 목록이 없습니다.',
         validating: '⏳ 목록 확인 중...',
@@ -602,7 +657,7 @@
         enterUrlError: '⚠️ 올바른 링크를 입력하세요.'
       },
       zh: {
-        title: 'CinePilot Studio',
+        title: 'CinePilot',
         catalogsTitle: '影视片单',
         trendingMovies: '🔥 每周热门电影',
         trendingSeries: '📺 每周热门剧集',
@@ -624,6 +679,7 @@
         trailers: '🎬 官方高清预告片',
         installBtn: '🚀 安装到 Stremio',
         copyBtn: '📋 复制清单链接',
+        patreonBtn: '☕ 在 Patreon 上支持我们',
         copied: '✅ 已复制！',
         noLists: '暂无自定义片单。',
         validating: '⏳ 正在验证片单...',
@@ -662,6 +718,7 @@
       document.getElementById('tTrailers').innerText = t.trailers;
       document.getElementById('installBtn').innerText = t.installBtn;
       document.getElementById('copyBtn').innerText = t.copyBtn;
+      document.getElementById('patreonBtn').innerText = t.patreonBtn;
 
       renderCustomLists();
       updateUrls();
@@ -816,7 +873,7 @@
       });
     });
 
-    // Auto-detect browser language or default to Turkish/English
+    // Auto-detect browser language or default to English/Turkish
     const browserLang = (navigator.language || 'en').split('-')[0];
     const initialLang = I18N[browserLang] ? browserLang : 'en';
     document.getElementById('langSelect').value = initialLang;
