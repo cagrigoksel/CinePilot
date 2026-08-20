@@ -55,6 +55,7 @@ function getLocalIp() {
 
 function parseConfig(configStr) {
   const defaults = {
+    lang: 'tr',
     enableTrendingMovies: true,
     enableTrendingSeries: true,
     enableOscar: true,
@@ -64,8 +65,6 @@ function parseConfig(configStr) {
     letterboxdUser: '',
     enableLbxWatchlist: true,
     enableLbxDiary: true,
-    traktUser: '',
-    enableTraktWatchlist: true,
     customLists: []
   };
 
@@ -81,6 +80,103 @@ function parseConfig(configStr) {
     return defaults;
   }
 }
+
+// Multi-Language I18N Catalog Names & Locales
+const LANG_LOCALES = {
+  tr: 'tr-TR',
+  en: 'en-US',
+  es: 'es-ES',
+  de: 'de-DE',
+  fr: 'fr-FR',
+  it: 'it-IT',
+  ja: 'ja-JP',
+  ko: 'ko-KR',
+  zh: 'zh-CN'
+};
+
+const CATALOG_NAMES = {
+  tr: {
+    trendingMovies: '🔥 Haftalık Trend Filmler',
+    trendingSeries: '📺 Haftalık Trend Diziler',
+    oscar: '✨ Oscar Ödüllü Filmler',
+    top250: '🏆 IMDb Top 250',
+    watchlist: (u) => `📌 İzleme Listem (${u})`,
+    diary: (u) => `🍿 İzlediklerim (${u})`,
+    desc: 'Modüler Stremio Katalog Oluşturucu, Trendler, Oscar, Top 250, Özel Letterboxd & TMDB Listeleri ve Fragmanlar.'
+  },
+  en: {
+    trendingMovies: '🔥 Trending Movies',
+    trendingSeries: '📺 Trending Series',
+    oscar: '✨ Oscar Collection',
+    top250: '🏆 IMDb Top 250',
+    watchlist: (u) => `📌 Watchlist (${u})`,
+    diary: (u) => `🍿 Diary (${u})`,
+    desc: 'Modular Stremio Catalog Builder, Trending, Oscars, Top 250, Custom Letterboxd & TMDB Lists, and 4K Trailers.'
+  },
+  es: {
+    trendingMovies: '🔥 Películas Populares',
+    trendingSeries: '📺 Series Populares',
+    oscar: '✨ Colección Óscar',
+    top250: '🏆 Top 250 Películas',
+    watchlist: (u) => `📌 Lista de Seguimiento (${u})`,
+    diary: (u) => `🍿 Películas Vistas (${u})`,
+    desc: 'Creador modular de catálogos de Stremio, tendencias, listas personalizadas y tráilers en 4K.'
+  },
+  de: {
+    trendingMovies: '🔥 Beliebte Filme',
+    trendingSeries: '📺 Beliebte Serien',
+    oscar: '✨ Oscar-Gewinner',
+    top250: '🏆 Top 250 Filme',
+    watchlist: (u) => `📌 Merkliste (${u})`,
+    diary: (u) => `🍿 Gesehene Filme (${u})`,
+    desc: 'Modularer Stremio Katalog-Builder mit Trends, Oscar-Gewinnern und 4K-Trailern.'
+  },
+  fr: {
+    trendingMovies: '🔥 Films Tendances',
+    trendingSeries: '📺 Séries Tendances',
+    oscar: '✨ Collection Oscars',
+    top250: '🏆 Top 250 Films',
+    watchlist: (u) => `📌 Liste à voir (${u})`,
+    diary: (u) => `🍿 Films vus (${u})`,
+    desc: 'Générateur modulaire de catalogues Stremio avec tendances, Oscars et bandes-annonces 4K.'
+  },
+  it: {
+    trendingMovies: '🔥 Film di Tendenza',
+    trendingSeries: '📺 Serie di Tendenza',
+    oscar: '✨ Collezione Oscar',
+    top250: '🏆 Top 250 Film',
+    watchlist: (u) => `📌 Watchlist (${u})`,
+    diary: (u) => `🍿 Film Visti (${u})`,
+    desc: 'Creatore modulare di cataloghi Stremio con tendenze, Oscar e trailer in 4K.'
+  },
+  ja: {
+    trendingMovies: '🔥 トレンド映画',
+    trendingSeries: '📺 トレンドドラマ',
+    oscar: '✨ アカデミー賞受賞作',
+    top250: '🏆 歴代映画トップ250',
+    watchlist: (u) => `📌 ウォッチリスト (${u})`,
+    diary: (u) => `🍿 視聴履歴 (${u})`,
+    desc: 'Stremio向けモジュール式カタログビルダー。'
+  },
+  ko: {
+    trendingMovies: '🔥 주간 인기 영화',
+    trendingSeries: '📺 주간 인기 시리즈',
+    oscar: '✨ 오스카 수상작 컬렉션',
+    top250: '🏆 역대 영화 Top 250',
+    watchlist: (u) => `📌 보고 싶은 영화 (${u})`,
+    diary: (u) => `🍿 시청한 영화 (${u})`,
+    desc: 'Stremio 맞춤형 카탈로그 빌더.'
+  },
+  zh: {
+    trendingMovies: '🔥 每周热门电影',
+    trendingSeries: '📺 每周热门剧集',
+    oscar: '✨ 奥斯卡获奖作品',
+    top250: '🏆 经典电影 Top 250',
+    watchlist: (u) => `📌 待看清单 (${u})`,
+    diary: (u) => `🍿 观影记录 (${u})`,
+    desc: 'Stremio 模块化片单构建器。'
+  }
+};
 
 // Pure Genres
 const PURE_MOVIE_GENRES = [
@@ -208,7 +304,7 @@ function getPosterUrl(imdbId, tmdbPosterPath, rpdbKey = '') {
 
 // -------------------------------------------------------------
 // Universal Multi-Platform Scraper & List Resolver
-// Supports: Letterboxd (Cloudflare bypass), TMDB (Lists & Collections), Trakt
+// Supports: Letterboxd (Cloudflare bypass & Multi-page), TMDB (Lists & Collections)
 // -------------------------------------------------------------
 
 function runPythonScraper(target) {
@@ -231,7 +327,7 @@ function runPythonScraper(target) {
   });
 }
 
-async function scrapeUniversalList(urlOrUser) {
+async function scrapeUniversalList(urlOrUser, langLocale = 'tr-TR') {
   const target = urlOrUser.trim();
 
   // 1. TMDB Platform Resolution
@@ -242,7 +338,7 @@ async function scrapeUniversalList(urlOrUser) {
     if (listMatch) {
       const listId = listMatch[1];
       try {
-        const res = await fetch(`https://api.themoviedb.org/3/list/${listId}?api_key=${TMDB_API_KEY}&language=tr-TR`).then(r => r.json());
+        const res = await fetch(`https://api.themoviedb.org/3/list/${listId}?api_key=${TMDB_API_KEY}&language=${langLocale}`).then(r => r.json());
         if (res.items && Array.isArray(res.items)) {
           return res.items.map(i => ({
             title: i.title || i.name,
@@ -255,7 +351,7 @@ async function scrapeUniversalList(urlOrUser) {
     } else if (collectionMatch) {
       const colId = collectionMatch[1];
       try {
-        const res = await fetch(`https://api.themoviedb.org/3/collection/${colId}?api_key=${TMDB_API_KEY}&language=tr-TR`).then(r => r.json());
+        const res = await fetch(`https://api.themoviedb.org/3/collection/${colId}?api_key=${TMDB_API_KEY}&language=${langLocale}`).then(r => r.json());
         if (res.parts && Array.isArray(res.parts)) {
           return res.parts.map(i => ({
             title: i.title,
@@ -269,13 +365,13 @@ async function scrapeUniversalList(urlOrUser) {
     return [];
   }
 
-  // 2. Primary Scraper: Python Cloudscraper (Full 250+ pagination & Cloudflare bypass)
+  // 2. Primary Scraper: Python Cloudscraper (Multi-page Letterboxd bypass)
   const pyResults = await runPythonScraper(target);
   if (pyResults && pyResults.length > 0) {
     return pyResults;
   }
 
-  // 3. Fallback Scraper: Native Node.js Fetch (Page 1 fallback)
+  // 3. Fallback Scraper: Native Node.js Fetch
   let baseTarget = target;
   if (!target.startsWith('http')) {
     baseTarget = `https://letterboxd.com/${target}/watchlist/`;
@@ -310,6 +406,8 @@ async function scrapeUniversalList(urlOrUser) {
 // -------------------------------------------------------------
 
 function getManifest(config) {
+  const lang = config.lang && CATALOG_NAMES[config.lang] ? config.lang : 'tr';
+  const t = CATALOG_NAMES[lang];
   const catalogs = [];
 
   // 1. Haftalık Trend Filmler
@@ -317,7 +415,7 @@ function getManifest(config) {
     catalogs.push({
       id: 'trending_movies',
       type: 'movie',
-      name: `🔥 Trending Movies`,
+      name: t.trendingMovies,
       extra: [
         { name: 'search', isRequired: false },
         { name: 'genre', isRequired: false, options: PURE_MOVIE_GENRES },
@@ -331,7 +429,7 @@ function getManifest(config) {
     catalogs.push({
       id: 'trending_series',
       type: 'series',
-      name: `📺 Trending Series`,
+      name: t.trendingSeries,
       extra: [
         { name: 'search', isRequired: false },
         { name: 'genre', isRequired: false, options: PURE_SERIES_GENRES },
@@ -345,7 +443,7 @@ function getManifest(config) {
     catalogs.push({
       id: 'oscar_collection',
       type: 'movie',
-      name: `✨ Oscar Collection`,
+      name: t.oscar,
       extra: [{ name: 'genre', isRequired: false, options: PURE_MOVIE_GENRES }, { name: 'skip', isRequired: false }]
     });
   }
@@ -355,12 +453,12 @@ function getManifest(config) {
     catalogs.push({
       id: 'top250_collection',
       type: 'movie',
-      name: `🏆 Top 250 Movies`,
+      name: t.top250,
       extra: [{ name: 'genre', isRequired: false, options: PURE_MOVIE_GENRES }, { name: 'skip', isRequired: false }]
     });
   }
 
-  // 5. User Defined Custom Lists (Letterboxd / TMDB / Trakt)
+  // 5. User Defined Custom Lists (Letterboxd / TMDB)
   if (Array.isArray(config.customLists)) {
     config.customLists.forEach((list, idx) => {
       const type = list.type === 'series' ? 'series' : 'movie';
@@ -384,7 +482,7 @@ function getManifest(config) {
       catalogs.push({
         id: 'my_watchlist',
         type: 'movie',
-        name: `📌 Watchlist (${user})`,
+        name: t.watchlist(user),
         extra: [{ name: 'genre', isRequired: false, options: PURE_MOVIE_GENRES }, { name: 'skip', isRequired: false }]
       });
     }
@@ -392,20 +490,7 @@ function getManifest(config) {
       catalogs.push({
         id: 'my_diary',
         type: 'movie',
-        name: `🍿 Diary (${user})`,
-        extra: [{ name: 'genre', isRequired: false, options: PURE_MOVIE_GENRES }, { name: 'skip', isRequired: false }]
-      });
-    }
-  }
-
-  // 7. Trakt Watchlist
-  if (config.traktUser && config.traktUser.trim() !== '') {
-    const tUser = config.traktUser.trim();
-    if (config.enableTraktWatchlist !== false) {
-      catalogs.push({
-        id: 'trakt_watchlist',
-        type: 'movie',
-        name: `📌 Trakt Watchlist (${tUser})`,
+        name: t.diary(user),
         extra: [{ name: 'genre', isRequired: false, options: PURE_MOVIE_GENRES }, { name: 'skip', isRequired: false }]
       });
     }
@@ -414,8 +499,8 @@ function getManifest(config) {
   return {
     id: 'community.cinepilot.studio',
     name: 'CinePilot Studio',
-    version: '5.5.0',
-    description: 'Modüler Stremio Katalog Oluşturucu, Trendler, Oscar, Top 250, Özel Letterboxd / TMDB / Trakt Listeleri ve Fragmanlar.',
+    version: '5.6.0',
+    description: t.desc,
     resources: ['catalog', 'meta', 'stream'],
     types: ['movie', 'series'],
     catalogs: catalogs,
@@ -424,16 +509,16 @@ function getManifest(config) {
 }
 
 // -------------------------------------------------------------
-// TMDB & Resolver Helpers
+// TMDB & Resolver Helpers (Multi-Language Supported)
 // -------------------------------------------------------------
 
-async function fetchTmdbDetails(tmdbId, type = 'movie') {
-  const cacheKey = `tmdb_${type}_${tmdbId}`;
+async function fetchTmdbDetails(tmdbId, type = 'movie', langLocale = 'tr-TR') {
+  const cacheKey = `tmdb_${type}_${tmdbId}_${langLocale}`;
   const cached = getCache(cacheKey);
   if (cached) return cached;
 
   try {
-    const url = `https://api.themoviedb.org/3/${type}/${tmdbId}?api_key=${TMDB_API_KEY}&language=tr-TR&append_to_response=external_ids,videos,credits,images`;
+    const url = `https://api.themoviedb.org/3/${type}/${tmdbId}?api_key=${TMDB_API_KEY}&language=${langLocale}&append_to_response=external_ids,videos,credits,images`;
     const res = await fetch(url);
     if (!res.ok) return null;
     const data = await res.json();
@@ -444,13 +529,13 @@ async function fetchTmdbDetails(tmdbId, type = 'movie') {
   }
 }
 
-async function fetchTmdbVideosFallback(tmdbId, type = 'movie') {
-  const cacheKey = `tmdb_videos_${type}_${tmdbId}`;
+async function fetchTmdbVideosFallback(tmdbId, type = 'movie', langLocale = 'tr-TR') {
+  const cacheKey = `tmdb_videos_${type}_${tmdbId}_${langLocale}`;
   const cached = getCache(cacheKey);
   if (cached) return cached;
 
   try {
-    let url = `https://api.themoviedb.org/3/${type}/${tmdbId}/videos?api_key=${TMDB_API_KEY}&language=tr-TR`;
+    let url = `https://api.themoviedb.org/3/${type}/${tmdbId}/videos?api_key=${TMDB_API_KEY}&language=${langLocale}`;
     let res = await fetch(url).then(r => r.json());
     let results = res.results || [];
 
@@ -467,13 +552,13 @@ async function fetchTmdbVideosFallback(tmdbId, type = 'movie') {
   }
 }
 
-async function fetchTmdbSeasonDetails(tmdbId, seasonNum) {
-  const cacheKey = `tmdb_season_${tmdbId}_${seasonNum}`;
+async function fetchTmdbSeasonDetails(tmdbId, seasonNum, langLocale = 'tr-TR') {
+  const cacheKey = `tmdb_season_${tmdbId}_${seasonNum}_${langLocale}`;
   const cached = getCache(cacheKey);
   if (cached) return cached;
 
   try {
-    const url = `https://api.themoviedb.org/3/tv/${tmdbId}/season/${seasonNum}?api_key=${TMDB_API_KEY}&language=tr-TR`;
+    const url = `https://api.themoviedb.org/3/tv/${tmdbId}/season/${seasonNum}?api_key=${TMDB_API_KEY}&language=${langLocale}`;
     const res = await fetch(url);
     if (!res.ok) return null;
     const data = await res.json();
@@ -484,13 +569,13 @@ async function fetchTmdbSeasonDetails(tmdbId, seasonNum) {
   }
 }
 
-async function findTmdbByImdb(imdbId) {
-  const cacheKey = `imdb_${imdbId}`;
+async function findTmdbByImdb(imdbId, langLocale = 'tr-TR') {
+  const cacheKey = `imdb_${imdbId}_${langLocale}`;
   const cached = getCache(cacheKey);
   if (cached) return cached;
 
   try {
-    const url = `https://api.themoviedb.org/3/find/${imdbId}?api_key=${TMDB_API_KEY}&external_source=imdb_id&language=tr-TR`;
+    const url = `https://api.themoviedb.org/3/find/${imdbId}?api_key=${TMDB_API_KEY}&external_source=imdb_id&language=${langLocale}`;
     const res = await fetch(url);
     if (!res.ok) return null;
     const data = await res.json();
@@ -504,13 +589,13 @@ async function findTmdbByImdb(imdbId) {
   }
 }
 
-async function searchTmdb(title, year = null, type = 'movie') {
-  const cacheKey = `search_${type}_${title}_${year || ''}`;
+async function searchTmdb(title, year = null, type = 'movie', langLocale = 'tr-TR') {
+  const cacheKey = `search_${type}_${title}_${year || ''}_${langLocale}`;
   const cached = getCache(cacheKey);
   if (cached) return cached;
 
   try {
-    let url = `https://api.themoviedb.org/3/search/${type}?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(title)}&language=tr-TR`;
+    let url = `https://api.themoviedb.org/3/search/${type}?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(title)}&language=${langLocale}`;
     if (year) url += `&year=${year}`;
     const res = await fetch(url);
     if (!res.ok) return null;
@@ -523,10 +608,10 @@ async function searchTmdb(title, year = null, type = 'movie') {
   }
 }
 
-// Convert Scraped List to Metas concurrently (Fast batching)
-async function resolveScrapedListToMetas(scrapedList, type = 'movie', rpdbKey = '') {
+// Convert Scraped List to Metas concurrently
+async function resolveScrapedListToMetas(scrapedList, type = 'movie', rpdbKey = '', langLocale = 'tr-TR') {
   const endpointType = type === 'series' ? 'tv' : 'movie';
-  const targetItems = scrapedList.slice(0, 150); // Fast load for top 150 items
+  const targetItems = scrapedList.slice(0, 150);
 
   const promises = targetItems.map(async (item) => {
     try {
@@ -534,12 +619,12 @@ async function resolveScrapedListToMetas(scrapedList, type = 'movie', rpdbKey = 
       let searchedId = item.tmdbId;
 
       if (searchedId) {
-        details = await fetchTmdbDetails(searchedId, endpointType);
+        details = await fetchTmdbDetails(searchedId, endpointType, langLocale);
       } else {
-        const searched = await searchTmdb(item.title, item.year, endpointType);
+        const searched = await searchTmdb(item.title, item.year, endpointType, langLocale);
         if (searched) {
           searchedId = searched.id;
-          details = await fetchTmdbDetails(searched.id, endpointType);
+          details = await fetchTmdbDetails(searched.id, endpointType, langLocale);
         }
       }
 
@@ -565,15 +650,15 @@ async function resolveScrapedListToMetas(scrapedList, type = 'movie', rpdbKey = 
 }
 
 // Convert Curated IMDb ID List to Metas concurrently
-async function resolveImdbList(imdbIds, type = 'movie', rpdbKey = '') {
+async function resolveImdbList(imdbIds, type = 'movie', rpdbKey = '', langLocale = 'tr-TR') {
   const promises = imdbIds.map(async (imdbId) => {
     try {
       let found = null;
       if (imdbId.startsWith('tmdb:')) {
         const tmdbId = imdbId.split(':')[1];
-        found = await fetchTmdbDetails(tmdbId, type === 'series' ? 'tv' : 'movie');
+        found = await fetchTmdbDetails(tmdbId, type === 'series' ? 'tv' : 'movie', langLocale);
       } else {
-        found = await findTmdbByImdb(imdbId);
+        found = await findTmdbByImdb(imdbId, langLocale);
       }
       if (found) {
         const genres = extractGenres(found);
@@ -596,11 +681,11 @@ async function resolveImdbList(imdbIds, type = 'movie', rpdbKey = '') {
 }
 
 // Multi-page TMDB Weekly Trending Fetcher
-async function fetchTrending100(type = 'movie', rpdbKey = '', genreName = null) {
+async function fetchTrending100(type = 'movie', rpdbKey = '', genreName = null, langLocale = 'tr-TR') {
   const endpointType = type === 'series' ? 'tv' : 'movie';
   const genreId = genreName && genreName !== 'Tümü' ? TMDB_GENRE_MAP[genreName] : null;
 
-  const cacheKey = `trending_100_${type}_${genreName || 'all'}_${rpdbKey || 'no_rpdb'}`;
+  const cacheKey = `trending_100_${type}_${genreName || 'all'}_${rpdbKey || 'no_rpdb'}_${langLocale}`;
   const cached = getCache(cacheKey);
   if (cached) return cached;
 
@@ -608,13 +693,13 @@ async function fetchTrending100(type = 'movie', rpdbKey = '', genreName = null) 
 
   if (genreId) {
     pagePromises = [1, 2, 3, 4, 5].map(p =>
-      fetch(`https://api.themoviedb.org/3/discover/${endpointType}?api_key=${TMDB_API_KEY}&with_genres=${genreId}&language=tr-TR&sort_by=popularity.desc&page=${p}`)
+      fetch(`https://api.themoviedb.org/3/discover/${endpointType}?api_key=${TMDB_API_KEY}&with_genres=${genreId}&language=${langLocale}&sort_by=popularity.desc&page=${p}`)
         .then(r => r.json())
         .catch(() => ({ results: [] }))
     );
   } else {
     pagePromises = [1, 2, 3, 4, 5].map(p =>
-      fetch(`https://api.themoviedb.org/3/trending/${endpointType}/week?api_key=${TMDB_API_KEY}&language=tr-TR&page=${p}`)
+      fetch(`https://api.themoviedb.org/3/trending/${endpointType}/week?api_key=${TMDB_API_KEY}&language=${langLocale}&page=${p}`)
         .then(r => r.json())
         .catch(() => ({ results: [] }))
     );
@@ -625,7 +710,7 @@ async function fetchTrending100(type = 'movie', rpdbKey = '', genreName = null) 
 
   const metaPromises = rawItems.map(async (item) => {
     try {
-      const details = await fetchTmdbDetails(item.id, endpointType);
+      const details = await fetchTmdbDetails(item.id, endpointType, langLocale);
       const imdbId = details?.external_ids?.imdb_id;
       return {
         id: imdbId || `tmdb:${item.id}`,
@@ -647,14 +732,14 @@ async function fetchTrending100(type = 'movie', rpdbKey = '', genreName = null) 
 }
 
 // Search TMDB directly for User Search Queries
-async function searchTmdbCatalog(query, type = 'movie', rpdbKey = '') {
+async function searchTmdbCatalog(query, type = 'movie', rpdbKey = '', langLocale = 'tr-TR') {
   const endpointType = type === 'series' ? 'tv' : 'movie';
   try {
-    const url = `https://api.themoviedb.org/3/search/${endpointType}?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&language=tr-TR`;
+    const url = `https://api.themoviedb.org/3/search/${endpointType}?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&language=${langLocale}`;
     const res = await fetch(url).then(r => r.json());
     const metas = [];
     for (const item of (res.results || []).slice(0, 30)) {
-      const details = await fetchTmdbDetails(item.id, endpointType);
+      const details = await fetchTmdbDetails(item.id, endpointType, langLocale);
       const imdbId = details?.external_ids?.imdb_id;
       metas.push({
         id: imdbId || `tmdb:${item.id}`,
@@ -687,7 +772,7 @@ app.get('/api/validate-list', async (req, res) => {
     if (items.length > 0) {
       return res.json({ valid: true, count: items.length, sample: items.slice(0, 3).map(i => i.title) });
     } else {
-      return res.json({ valid: false, error: 'Bu bağlantıdan liste verisi çekilemedi. Bağlantının herkese açık bir Letterboxd, TMDB veya Trakt listesi olduğundan emin olun.' });
+      return res.json({ valid: false, error: 'Bu bağlantıdan liste verisi çekilemedi. Bağlantının herkese açık bir Letterboxd veya TMDB listesi olduğundan emin olun.' });
     }
   } catch (err) {
     return res.json({ valid: false, error: 'Liste kontrol edilirken hata: ' + err.message });
@@ -728,7 +813,7 @@ app.get(['/manifest.json', '/:config/manifest.json'], (req, res) => {
   res.json(getManifest(config));
 });
 
-// Catalog Handler
+// Catalog Handler (Supports multi-language & smart pagination)
 app.get([
   '/catalog/:type/:id.json',
   '/catalog/:type/:id/:extra.json',
@@ -736,11 +821,13 @@ app.get([
   '/:config/catalog/:type/:id/:extra.json'
 ], async (req, res) => {
   const config = parseConfig(req.params.config);
+  const langLocale = LANG_LOCALES[config.lang] || 'tr-TR';
   const type = req.params.type;
   const id = req.params.id;
 
   let selectedGenre = null;
   let searchQuery = null;
+  let skip = 0;
 
   if (req.params.extra) {
     const raw = decodeURIComponent(req.params.extra).replace(/\.json$/, '');
@@ -749,6 +836,9 @@ app.get([
 
     const genreMatch = raw.match(/genre=([^&]+)/);
     if (genreMatch) selectedGenre = genreMatch[1].trim();
+
+    const skipMatch = raw.match(/skip=(\d+)/);
+    if (skipMatch) skip = parseInt(skipMatch[1], 10);
   }
 
   let metas = [];
@@ -756,54 +846,54 @@ app.get([
   try {
     // 0. GLOBAL SEARCH BAR HANDLER
     if (searchQuery) {
-      metas = await searchTmdbCatalog(searchQuery, type, config.rpdbKey);
+      metas = await searchTmdbCatalog(searchQuery, type, config.rpdbKey, langLocale);
       return res.json({ metas });
     }
 
     // 1. HAFTALIK TREND FİLMLER
     if (id === 'trending_movies') {
-      metas = await fetchTrending100('movie', config.rpdbKey, selectedGenre);
+      metas = await fetchTrending100('movie', config.rpdbKey, selectedGenre, langLocale);
       return res.json({ metas });
     }
 
     // 2. HAFTALIK TREND DİZİLER
     else if (id === 'trending_series') {
-      metas = await fetchTrending100('series', config.rpdbKey, selectedGenre);
+      metas = await fetchTrending100('series', config.rpdbKey, selectedGenre, langLocale);
       return res.json({ metas });
     }
 
     // 3. OSCAR ÖDÜLLÜ FİLMLER (~96)
     else if (id === 'oscar_collection') {
-      const cacheKey = `full_oscar_v15_${config.rpdbKey || 'no_rpdb'}`;
+      const cacheKey = `full_oscar_v16_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
       metas = getCache(cacheKey);
       if (!metas) {
-        metas = await resolveImdbList(curatedData.oscar, 'movie', config.rpdbKey);
+        metas = await resolveImdbList(curatedData.oscar, 'movie', config.rpdbKey, langLocale);
         setCache(cacheKey, metas, 24 * 60 * 60 * 1000);
       }
     }
 
     // 4. TOP 250 MOVIES (~98)
     else if (id === 'top250_collection') {
-      const cacheKey = `full_top250_v15_${config.rpdbKey || 'no_rpdb'}`;
+      const cacheKey = `full_top250_v16_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
       metas = getCache(cacheKey);
       if (!metas) {
-        metas = await resolveImdbList(curatedData.top250, 'movie', config.rpdbKey);
+        metas = await resolveImdbList(curatedData.top250, 'movie', config.rpdbKey, langLocale);
         setCache(cacheKey, metas, 24 * 60 * 60 * 1000);
       }
     }
 
-    // 5. USER DEFINED CUSTOM LISTS (Letterboxd / TMDB / Trakt)
+    // 5. USER DEFINED CUSTOM LISTS (Letterboxd / TMDB)
     else if (id.startsWith('custom_')) {
       const idx = parseInt(id.split('_')[1], 10);
       const customList = config.customLists && config.customLists[idx];
 
       if (customList && customList.url) {
-        const cacheKey = `custom_list_${idx}_${encodeURIComponent(customList.url)}_${config.rpdbKey || 'no_rpdb'}`;
+        const cacheKey = `custom_list_${idx}_${encodeURIComponent(customList.url)}_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
         metas = getCache(cacheKey);
 
         if (!metas) {
-          const scraped = await scrapeUniversalList(customList.url);
-          metas = await resolveScrapedListToMetas(scraped, customList.type || type, config.rpdbKey);
+          const scraped = await scrapeUniversalList(customList.url, langLocale);
+          metas = await resolveScrapedListToMetas(scraped, customList.type || type, config.rpdbKey, langLocale);
           setCache(cacheKey, metas, 2 * 60 * 60 * 1000); // 2 hours cache
         }
       }
@@ -811,33 +901,22 @@ app.get([
 
     // 6. WATCHLIST (Letterboxd)
     else if (id === 'my_watchlist' && config.letterboxdUser) {
-      const cacheKey = `user_wl_${config.letterboxdUser}_${config.rpdbKey || 'no_rpdb'}`;
+      const cacheKey = `user_wl_${config.letterboxdUser}_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
       metas = getCache(cacheKey);
       if (!metas) {
-        const scraped = await scrapeUniversalList(`https://letterboxd.com/${config.letterboxdUser}/watchlist/`);
-        metas = await resolveScrapedListToMetas(scraped, 'movie', config.rpdbKey);
+        const scraped = await scrapeUniversalList(`https://letterboxd.com/${config.letterboxdUser}/watchlist/`, langLocale);
+        metas = await resolveScrapedListToMetas(scraped, 'movie', config.rpdbKey, langLocale);
         setCache(cacheKey, metas, 30 * 60 * 1000);
       }
     }
 
     // 7. DIARY (Letterboxd)
     else if (id === 'my_diary' && config.letterboxdUser) {
-      const cacheKey = `user_diary_${config.letterboxdUser}_${config.rpdbKey || 'no_rpdb'}`;
+      const cacheKey = `user_diary_${config.letterboxdUser}_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
       metas = getCache(cacheKey);
       if (!metas) {
-        const scraped = await scrapeUniversalList(`https://letterboxd.com/${config.letterboxdUser}/films/`);
-        metas = await resolveScrapedListToMetas(scraped, 'movie', config.rpdbKey);
-        setCache(cacheKey, metas, 30 * 60 * 1000);
-      }
-    }
-
-    // 8. TRAKT WATCHLIST
-    else if (id === 'trakt_watchlist' && config.traktUser) {
-      const cacheKey = `trakt_wl_${config.traktUser}_${config.rpdbKey || 'no_rpdb'}`;
-      metas = getCache(cacheKey);
-      if (!metas) {
-        const scraped = await scrapeUniversalList(`https://trakt.tv/users/${config.traktUser}/watchlist`);
-        metas = await resolveScrapedListToMetas(scraped, 'movie', config.rpdbKey);
+        const scraped = await scrapeUniversalList(`https://letterboxd.com/${config.letterboxdUser}/films/`, langLocale);
+        metas = await resolveScrapedListToMetas(scraped, 'movie', config.rpdbKey, langLocale);
         setCache(cacheKey, metas, 30 * 60 * 1000);
       }
     }
@@ -847,6 +926,11 @@ app.get([
       metas = metas.filter(item => matchesGenre(item.genres, selectedGenre));
     }
 
+    // Handle skip pagination if requested by Stremio
+    if (skip > 0 && metas.length > 0) {
+      metas = metas.slice(skip);
+    }
+
     res.json({ metas });
   } catch (err) {
     console.error('Catalog error:', err);
@@ -854,9 +938,10 @@ app.get([
   }
 });
 
-// Meta Endpoint
+// Meta Endpoint (Multi-Language Supported)
 app.get(['/meta/:type/:id.json', '/:config/meta/:type/:id.json'], async (req, res) => {
   const config = parseConfig(req.params.config);
+  const langLocale = LANG_LOCALES[config.lang] || 'tr-TR';
   const type = req.params.type;
   const id = req.params.id;
 
@@ -867,14 +952,14 @@ app.get(['/meta/:type/:id.json', '/:config/meta/:type/:id.json'], async (req, re
 
     if (id.startsWith('tt')) {
       imdbId = id;
-      const found = await findTmdbByImdb(id);
+      const found = await findTmdbByImdb(id, langLocale);
       if (found) {
         tmdbIdNum = found.id;
-        tmdbData = await fetchTmdbDetails(found.id, type === 'series' ? 'tv' : 'movie');
+        tmdbData = await fetchTmdbDetails(found.id, type === 'series' ? 'tv' : 'movie', langLocale);
       }
     } else if (id.startsWith('tmdb:')) {
       tmdbIdNum = id.split(':')[1];
-      tmdbData = await fetchTmdbDetails(tmdbIdNum, type === 'series' ? 'tv' : 'movie');
+      tmdbData = await fetchTmdbDetails(tmdbIdNum, type === 'series' ? 'tv' : 'movie', langLocale);
       imdbId = tmdbData?.external_ids?.imdb_id;
     }
 
@@ -894,7 +979,7 @@ app.get(['/meta/:type/:id.json', '/:config/meta/:type/:id.json'], async (req, re
     if (type === 'series' && tmdbData.seasons && tmdbIdNum) {
       const seasonPromises = tmdbData.seasons.map(s => {
         if (s.season_number === 0) return Promise.resolve(null);
-        return fetchTmdbSeasonDetails(tmdbIdNum, s.season_number);
+        return fetchTmdbSeasonDetails(tmdbIdNum, s.season_number, langLocale);
       });
 
       const seasonsDetails = await Promise.all(seasonPromises);
@@ -960,6 +1045,7 @@ app.get(['/meta/:type/:id.json', '/:config/meta/:type/:id.json'], async (req, re
 // Stream Endpoint: Official 4K / HD Trailers Only
 app.get(['/stream/:type/:id.json', '/:config/stream/:type/:id.json'], async (req, res) => {
   const config = parseConfig(req.params.config);
+  const langLocale = LANG_LOCALES[config.lang] || 'tr-TR';
   const type = req.params.type;
   const rawId = req.params.id;
 
@@ -973,7 +1059,7 @@ app.get(['/stream/:type/:id.json', '/:config/stream/:type/:id.json'], async (req
 
       if (rawId.startsWith('tt')) {
         const imdbId = rawId.split(':')[0];
-        const found = await findTmdbByImdb(imdbId);
+        const found = await findTmdbByImdb(imdbId, langLocale);
         targetTmdbId = found?.id;
         if (found?.title) targetType = 'movie';
         else if (found?.name) targetType = 'tv';
@@ -982,7 +1068,7 @@ app.get(['/stream/:type/:id.json', '/:config/stream/:type/:id.json'], async (req
       }
 
       if (targetTmdbId) {
-        const videos = await fetchTmdbVideosFallback(targetTmdbId, targetType);
+        const videos = await fetchTmdbVideosFallback(targetTmdbId, targetType, langLocale);
         const trailer = videos.find(v => v.site === 'YouTube' && (v.type === 'Trailer' || v.type === 'Teaser')) || videos[0];
 
         if (trailer && trailer.site === 'YouTube' && trailer.key) {
@@ -1003,7 +1089,7 @@ app.get(['/stream/:type/:id.json', '/:config/stream/:type/:id.json'], async (req
 
 app.listen(PORT, '0.0.0.0', () => {
   const ip = getLocalIp();
-  console.log(`🚀 CinePilot Studio v5.5.0 running on http://127.0.0.1:${PORT}`);
+  console.log(`🚀 CinePilot Studio v5.6.0 [Global i18n Edition] running on http://127.0.0.1:${PORT}`);
   console.log(`📡 Local Network URL: http://${ip}:${PORT}`);
   console.log(`⚙️ Web Configurator: http://127.0.0.1:${PORT}/configure`);
 });

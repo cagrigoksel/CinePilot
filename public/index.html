@@ -34,7 +34,7 @@
 
     .container {
       width: 100%;
-      max-width: 560px;
+      max-width: 580px;
       background: var(--card-bg);
       backdrop-filter: blur(20px);
       -webkit-backdrop-filter: blur(20px);
@@ -42,10 +42,28 @@
       border-radius: 20px;
       padding: 32px;
       box-shadow: 0 24px 60px rgba(0,0,0,0.7);
+      position: relative;
     }
 
-    .header { text-align: center; margin-bottom: 24px; }
-    h1 { font-size: 2.1rem; font-weight: 800; letter-spacing: -0.5px; }
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+
+    .header-title { font-size: 2.1rem; font-weight: 800; letter-spacing: -0.5px; }
+
+    .lang-select {
+      width: auto !important;
+      padding: 6px 12px !important;
+      font-size: 0.85rem !important;
+      background: rgba(13, 17, 23, 0.9) !important;
+      border: 1px solid var(--border) !important;
+      border-radius: 10px !important;
+      color: #fff !important;
+      cursor: pointer;
+    }
 
     .section-title {
       font-size: 0.95rem;
@@ -227,15 +245,26 @@
 <body>
 
   <div class="container">
-    <div class="header">
-      <h1>CinePilot Studio</h1>
+    <div class="top-bar">
+      <div class="header-title" id="tTitle">CinePilot Studio</div>
+      <select id="langSelect" class="lang-select">
+        <option value="tr">🇹🇷 Türkçe</option>
+        <option value="en" selected>🇺🇸 English</option>
+        <option value="es">🇪🇸 Español</option>
+        <option value="de">🇩🇪 Deutsch</option>
+        <option value="fr">🇫🇷 Français</option>
+        <option value="it">🇮🇹 Italiano</option>
+        <option value="ja">🇯🇵 日本語</option>
+        <option value="ko">🇰🇷 한국어</option>
+        <option value="zh">🇨🇳 中文</option>
+      </select>
     </div>
 
     <!-- 1. Kataloglar -->
-    <div class="section-title">Kataloglar</div>
+    <div class="section-title" id="tCatalogsTitle">Catalogs</div>
     
     <div class="switch-row">
-      <span class="switch-label">🔥 Trending Movies</span>
+      <span class="switch-label" id="tTrendingMovies">🔥 Trending Movies</span>
       <label class="switch">
         <input type="checkbox" id="enableTrendingMovies" checked>
         <span class="slider"></span>
@@ -243,7 +272,7 @@
     </div>
 
     <div class="switch-row">
-      <span class="switch-label">📺 Trending Series</span>
+      <span class="switch-label" id="tTrendingSeries">📺 Trending Series</span>
       <label class="switch">
         <input type="checkbox" id="enableTrendingSeries" checked>
         <span class="slider"></span>
@@ -251,7 +280,7 @@
     </div>
 
     <div class="switch-row">
-      <span class="switch-label">✨ Oscar Collection</span>
+      <span class="switch-label" id="tOscar">✨ Oscar Collection</span>
       <label class="switch">
         <input type="checkbox" id="enableOscar" checked>
         <span class="slider"></span>
@@ -259,54 +288,54 @@
     </div>
 
     <div class="switch-row">
-      <span class="switch-label">🏆 Top 250 Movies</span>
+      <span class="switch-label" id="tTop250">🏆 IMDb Top 250</span>
       <label class="switch">
         <input type="checkbox" id="enableTop250" checked>
         <span class="slider"></span>
       </label>
     </div>
 
-    <!-- 2. Özel Liste Ekleme (Doğrulama Destekli) -->
-    <div class="section-title">Özel Liste Ekle</div>
+    <!-- 2. Özel Liste Ekleme -->
+    <div class="section-title" id="tCustomListTitle">Add Custom List</div>
     <div class="custom-list-box">
       <div class="input-grid">
-        <input type="text" id="newListTitle" placeholder="Liste Başlığı (Örn: MCU Kronolojik)">
+        <input type="text" id="newListTitle" placeholder="List Title (e.g. Marvel Universe)">
         <select id="newListType">
-          <option value="movie">Film</option>
-          <option value="series">Dizi</option>
+          <option value="movie" id="tOptMovie">Movie</option>
+          <option value="series" id="tOptSeries">Series</option>
         </select>
       </div>
-      <input type="text" id="newListUrl" placeholder="Letterboxd, TMDB veya Trakt Liste Linki">
+      <input type="text" id="newListUrl" placeholder="Letterboxd or TMDB List URL">
       <div id="listValidationMsg" class="validation-msg"></div>
-      <button type="button" class="btn-add" id="addListBtn" style="margin-top: 8px;">+ Listeyi Doğrula ve Ekle</button>
+      <button type="button" class="btn-add" id="addListBtn" style="margin-top: 8px;">+ Verify & Add List</button>
 
       <div class="list-container" id="customListsContainer"></div>
     </div>
 
     <!-- 3. Ayarlar & API Anahtarları -->
-    <div class="section-title">Ayarlar</div>
+    <div class="section-title" id="tSettingsTitle">Settings</div>
     
     <div class="form-group">
-      <label class="field-label">RPDB API Key</label>
-      <input type="text" id="rpdbKey" placeholder="RPDB API Key (İsteğe bağlı)">
+      <label class="field-label" id="tRpdbLabel">RPDB API Key</label>
+      <input type="text" id="rpdbKey" placeholder="RPDB API Key (Optional)">
     </div>
 
     <!-- Letterboxd Username & Dynamic Toggles -->
     <div class="form-group">
-      <label class="field-label">Letterboxd Kullanıcı Adı</label>
-      <input type="text" id="letterboxdUser" placeholder="Letterboxd Kullanıcı Adı (İsteğe bağlı)">
+      <label class="field-label" id="tLetterboxdLabel">Letterboxd Username</label>
+      <input type="text" id="letterboxdUser" placeholder="Letterboxd Username (Optional)">
     </div>
 
     <div id="lbxToggles" style="display: none; margin-bottom: 12px;">
       <div class="switch-row sub-switch">
-        <span class="switch-label">📌 Letterboxd Watchlist</span>
+        <span class="switch-label" id="tWatchlist">📌 Watchlist</span>
         <label class="switch">
           <input type="checkbox" id="enableLbxWatchlist" checked>
           <span class="slider"></span>
         </label>
       </div>
       <div class="switch-row sub-switch">
-        <span class="switch-label">🍿 Letterboxd Diary</span>
+        <span class="switch-label" id="tDiary">🍿 Watched Movies (Diary)</span>
         <label class="switch">
           <input type="checkbox" id="enableLbxDiary" checked>
           <span class="slider"></span>
@@ -314,25 +343,9 @@
       </div>
     </div>
 
-    <!-- Trakt Username & Dynamic Toggles -->
-    <div class="form-group">
-      <label class="field-label">Trakt.tv Kullanıcı Adı</label>
-      <input type="text" id="traktUser" placeholder="Trakt Kullanıcı Adı (İsteğe bağlı)">
-    </div>
-
-    <div id="traktToggles" style="display: none; margin-bottom: 12px;">
-      <div class="switch-row sub-switch">
-        <span class="switch-label">📌 Trakt Watchlist</span>
-        <label class="switch">
-          <input type="checkbox" id="enableTraktWatchlist" checked>
-          <span class="slider"></span>
-        </label>
-      </div>
-    </div>
-
     <!-- Trailers Switch -->
     <div class="switch-row">
-      <span class="switch-label">🎬 Trailers</span>
+      <span class="switch-label" id="tTrailers">🎬 Official Trailers</span>
       <label class="switch">
         <input type="checkbox" id="enableTrailers" checked>
         <span class="slider"></span>
@@ -341,20 +354,326 @@
 
     <!-- 4. Yükleme ve Kopyalama Butonları -->
     <div class="btn-container">
-      <a href="#" id="installBtn" class="btn btn-primary">🚀 Stremio'ya Yükle</a>
-      <button type="button" id="copyBtn" class="btn btn-secondary">📋 Manifest Linkini Kopyala</button>
+      <a href="#" id="installBtn" class="btn btn-primary">🚀 Install to Stremio</a>
+      <button type="button" id="copyBtn" class="btn btn-secondary">📋 Copy Manifest Link</button>
     </div>
   </div>
 
   <script>
+    const I18N = {
+      tr: {
+        title: 'CinePilot Studio',
+        catalogsTitle: 'Kataloglar',
+        trendingMovies: '🔥 Haftalık Trend Filmler',
+        trendingSeries: '📺 Haftalık Trend Diziler',
+        oscar: '✨ Oscar Ödüllü Filmler',
+        top250: '🏆 IMDb Top 250',
+        customListTitle: 'Özel Liste Ekle',
+        listTitlePlaceholder: 'Liste Başlığı (Örn: Marvel Evreni)',
+        listUrlPlaceholder: 'Letterboxd veya TMDB Liste Linki',
+        optMovie: 'Film',
+        optSeries: 'Dizi',
+        addListBtn: '+ Listeyi Doğrula ve Ekle',
+        settingsTitle: 'Ayarlar',
+        rpdbLabel: 'RPDB API Key',
+        rpdbPlaceholder: 'RPDB API Key (İsteğe bağlı)',
+        letterboxdLabel: 'Letterboxd Kullanıcı Adı',
+        letterboxdPlaceholder: 'Letterboxd Kullanıcı Adı (İsteğe bağlı)',
+        watchlist: '📌 İzleme Listem (Watchlist)',
+        diary: '🍿 İzlediklerim (Diary)',
+        trailers: '🎬 Fragmanlar (Trailers)',
+        installBtn: '🚀 Stremio\'ya Yükle',
+        copyBtn: '📋 Manifest Linkini Kopyala',
+        copied: '✅ Kopyalandı!',
+        noLists: 'Henüz özel bir liste eklenmedi.',
+        validating: '⏳ Liste Kontrol Ediliyor...',
+        verifiedSuccess: '✅ Liste başarıyla doğrulandı!',
+        enterTitleError: '⚠️ Lütfen liste için bir başlık girin.',
+        enterUrlError: '⚠️ Lütfen geçerli bir bağlantı girin.'
+      },
+      en: {
+        title: 'CinePilot Studio',
+        catalogsTitle: 'Catalogs',
+        trendingMovies: '🔥 Trending Movies',
+        trendingSeries: '📺 Trending Series',
+        oscar: '✨ Oscar Collection',
+        top250: '🏆 IMDb Top 250',
+        customListTitle: 'Add Custom List',
+        listTitlePlaceholder: 'List Title (e.g. Marvel Cinematic Universe)',
+        listUrlPlaceholder: 'Letterboxd or TMDB List URL',
+        optMovie: 'Movie',
+        optSeries: 'Series',
+        addListBtn: '+ Verify & Add List',
+        settingsTitle: 'Settings',
+        rpdbLabel: 'RPDB API Key',
+        rpdbPlaceholder: 'RPDB API Key (Optional)',
+        letterboxdLabel: 'Letterboxd Username',
+        letterboxdPlaceholder: 'Letterboxd Username (Optional)',
+        watchlist: '📌 Watchlist',
+        diary: '🍿 Watched Movies (Diary)',
+        trailers: '🎬 Official Trailers',
+        installBtn: '🚀 Install to Stremio',
+        copyBtn: '📋 Copy Manifest Link',
+        copied: '✅ Copied!',
+        noLists: 'No custom lists added yet.',
+        validating: '⏳ Verifying List...',
+        verifiedSuccess: '✅ List verified successfully!',
+        enterTitleError: '⚠️ Please enter a title for the list.',
+        enterUrlError: '⚠️ Please enter a valid URL.'
+      },
+      es: {
+        title: 'CinePilot Studio',
+        catalogsTitle: 'Catálogos',
+        trendingMovies: '🔥 Películas Populares',
+        trendingSeries: '📺 Series Populares',
+        oscar: '✨ Colección Óscar',
+        top250: '🏆 Top 250 Películas',
+        customListTitle: 'Añadir Lista Personalizada',
+        listTitlePlaceholder: 'Título de la Lista',
+        listUrlPlaceholder: 'Enlace de Letterboxd o TMDB',
+        optMovie: 'Película',
+        optSeries: 'Serie',
+        addListBtn: '+ Verificar y Añadir',
+        settingsTitle: 'Ajustes',
+        rpdbLabel: 'Clave API de RPDB',
+        rpdbPlaceholder: 'Clave RPDB (Opcional)',
+        letterboxdLabel: 'Usuario de Letterboxd',
+        letterboxdPlaceholder: 'Usuario de Letterboxd (Opcional)',
+        watchlist: '📌 Lista de Seguimiento',
+        diary: '🍿 Películas Vistas',
+        trailers: '🎬 Tráilers Oficiales',
+        installBtn: '🚀 Instalar en Stremio',
+        copyBtn: '📋 Copiar Enlace del Manifiesto',
+        copied: '✅ ¡Copiado!',
+        noLists: 'Aún no has añadido listas personalizadas.',
+        validating: '⏳ Verificando...',
+        verifiedSuccess: '✅ ¡Lista verificada con éxito!',
+        enterTitleError: '⚠️ Por favor ingresa un título.',
+        enterUrlError: '⚠️ Por favor ingresa un enlace válido.'
+      },
+      de: {
+        title: 'CinePilot Studio',
+        catalogsTitle: 'Kataloge',
+        trendingMovies: '🔥 Beliebte Filme',
+        trendingSeries: '📺 Beliebte Serien',
+        oscar: '✨ Oscar-Gewinner',
+        top250: '🏆 Top 250 Filme',
+        customListTitle: 'Eigene Liste hinzufügen',
+        listTitlePlaceholder: 'Listenname',
+        listUrlPlaceholder: 'Letterboxd oder TMDB Link',
+        optMovie: 'Film',
+        optSeries: 'Serie',
+        addListBtn: '+ Überprüfen & Hinzufügen',
+        settingsTitle: 'Einstellungen',
+        rpdbLabel: 'RPDB API-Schlüssel',
+        rpdbPlaceholder: 'RPDB Schlüssel (Optional)',
+        letterboxdLabel: 'Letterboxd Benutzername',
+        letterboxdPlaceholder: 'Letterboxd Benutzername (Optional)',
+        watchlist: '📌 Merkliste',
+        diary: '🍿 Gesehene Filme',
+        trailers: '🎬 Offizielle Trailer',
+        installBtn: '🚀 In Stremio installieren',
+        copyBtn: '📋 Manifest-Link kopieren',
+        copied: '✅ Kopiert!',
+        noLists: 'Noch keine eigenen Listen hinzugefügt.',
+        validating: '⏳ Überprüfe...',
+        verifiedSuccess: '✅ Liste erfolgreich verifiziert!',
+        enterTitleError: '⚠️ Bitte gib einen Titel ein.',
+        enterUrlError: '⚠️ Bitte gib einen gültigen Link ein.'
+      },
+      fr: {
+        title: 'CinePilot Studio',
+        catalogsTitle: 'Catalogues',
+        trendingMovies: '🔥 Films Tendances',
+        trendingSeries: '📺 Séries Tendances',
+        oscar: '✨ Collection Oscars',
+        top250: '🏆 Top 250 Films',
+        customListTitle: 'Ajouter une liste',
+        listTitlePlaceholder: 'Titre de la liste',
+        listUrlPlaceholder: 'Lien Letterboxd ou TMDB',
+        optMovie: 'Film',
+        optSeries: 'Série',
+        addListBtn: '+ Vérifier & Ajouter',
+        settingsTitle: 'Paramètres',
+        rpdbLabel: 'Clé API RPDB',
+        rpdbPlaceholder: 'Clé RPDB (Optionnel)',
+        letterboxdLabel: 'Nom d\'utilisateur Letterboxd',
+        letterboxdPlaceholder: 'Nom d\'utilisateur (Optionnel)',
+        watchlist: '📌 Liste à voir',
+        diary: '🍿 Films vus',
+        trailers: '🎬 Bandes-annonces officielles',
+        installBtn: '🚀 Installer sur Stremio',
+        copyBtn: '📋 Copier le lien du manifeste',
+        copied: '✅ Copié !',
+        noLists: 'Aucune liste personnalisée ajoutée.',
+        validating: '⏳ Vérification...',
+        verifiedSuccess: '✅ Liste vérifiée avec succès !',
+        enterTitleError: '⚠️ Veuillez saisir un titre.',
+        enterUrlError: '⚠️ Veuillez saisir un lien valide.'
+      },
+      it: {
+        title: 'CinePilot Studio',
+        catalogsTitle: 'Cataloghi',
+        trendingMovies: '🔥 Film di Tendenza',
+        trendingSeries: '📺 Serie di Tendenza',
+        oscar: '✨ Collezione Oscar',
+        top250: '🏆 Top 250 Film',
+        customListTitle: 'Aggiungi Lista',
+        listTitlePlaceholder: 'Titolo Lista',
+        listUrlPlaceholder: 'Link Letterboxd o TMDB',
+        optMovie: 'Film',
+        optSeries: 'Serie TV',
+        addListBtn: '+ Verifica e Aggiungi',
+        settingsTitle: 'Impostazioni',
+        rpdbLabel: 'Chiave API RPDB',
+        rpdbPlaceholder: 'Chiave RPDB (Opzionale)',
+        letterboxdLabel: 'Username Letterboxd',
+        letterboxdPlaceholder: 'Username (Opzionale)',
+        watchlist: '📌 Watchlist',
+        diary: '🍿 Film Visti',
+        trailers: '🎬 Trailer Ufficiali',
+        installBtn: '🚀 Installa su Stremio',
+        copyBtn: '📋 Copia Link Manifesto',
+        copied: '✅ Copiato!',
+        noLists: 'Nessuna lista personalizzata aggiunta.',
+        validating: '⏳ Verifica in corso...',
+        verifiedSuccess: '✅ Lista verificata con successo!',
+        enterTitleError: '⚠️ Inserisci un titolo per la lista.',
+        enterUrlError: '⚠️ Inserisci un link valido.'
+      },
+      ja: {
+        title: 'CinePilot Studio',
+        catalogsTitle: 'カタログ',
+        trendingMovies: '🔥 トレンド映画',
+        trendingSeries: '📺 トレンドドラマ',
+        oscar: '✨ アカデミー賞受賞作',
+        top250: '🏆 歴代映画トップ250',
+        customListTitle: 'カスタムリストを追加',
+        listTitlePlaceholder: 'リスト名 (例: マーベル・シネマティック・ユニバース)',
+        listUrlPlaceholder: 'Letterboxd または TMDB のリンク',
+        optMovie: '映画',
+        optSeries: 'ドラマ',
+        addListBtn: '+ リストを確認して追加',
+        settingsTitle: '設定',
+        rpdbLabel: 'RPDB APIキー',
+        rpdbPlaceholder: 'RPDB APIキー (任意)',
+        letterboxdLabel: 'Letterboxd ユーザー名',
+        letterboxdPlaceholder: 'ユーザー名 (任意)',
+        watchlist: '📌 ウォッチリスト',
+        diary: '🍿 視聴履歴',
+        trailers: '🎬 公式予告編',
+        installBtn: '🚀 Stremio にインストール',
+        copyBtn: '📋 マニフェストリンクをコピー',
+        copied: '✅ コピーしました！',
+        noLists: 'カスタムリストはまだありません。',
+        validating: '⏳ リストを確認中...',
+        verifiedSuccess: '✅ リストを確認しました！',
+        enterTitleError: '⚠️ リスト名を入力してください。',
+        enterUrlError: '⚠️ 有効なリンクを入力してください。'
+      },
+      ko: {
+        title: 'CinePilot Studio',
+        catalogsTitle: '카탈로그',
+        trendingMovies: '🔥 주간 인기 영화',
+        trendingSeries: '📺 주간 인기 시리즈',
+        oscar: '✨ 오스카 수상작 컬렉션',
+        top250: '🏆 역대 영화 Top 250',
+        customListTitle: '맞춤 목록 추가',
+        listTitlePlaceholder: '목록 이름 (예: 마블 시네마틱 유니버스)',
+        listUrlPlaceholder: 'Letterboxd 또는 TMDB 목록 링크',
+        optMovie: '영화',
+        optSeries: '시리즈',
+        addListBtn: '+ 목록 확인 및 추가',
+        settingsTitle: '설정',
+        rpdbLabel: 'RPDB API 키',
+        rpdbPlaceholder: 'RPDB API 키 (선택 사항)',
+        letterboxdLabel: 'Letterboxd 사용자 이름',
+        letterboxdPlaceholder: '사용자 이름 (선택 사항)',
+        watchlist: '📌 보고 싶은 영화',
+        diary: '🍿 시청한 영화 목록',
+        trailers: '🎬 공식 예고편',
+        installBtn: '🚀 Stremio에 설치',
+        copyBtn: '📋 매니페스트 링크 복사',
+        copied: '✅ 복사 완료!',
+        noLists: '추가된 맞춤 목록이 없습니다.',
+        validating: '⏳ 목록 확인 중...',
+        verifiedSuccess: '✅ 목록이 성공적으로 확인되었습니다!',
+        enterTitleError: '⚠️ 목록 이름을 입력하세요.',
+        enterUrlError: '⚠️ 올바른 링크를 입력하세요.'
+      },
+      zh: {
+        title: 'CinePilot Studio',
+        catalogsTitle: '影视片单',
+        trendingMovies: '🔥 每周热门电影',
+        trendingSeries: '📺 每周热门剧集',
+        oscar: '✨ 奥斯卡获奖作品',
+        top250: '🏆 经典电影 Top 250',
+        customListTitle: '添加自定义片单',
+        listTitlePlaceholder: '片单名称 (例如: 漫威电影宇宙)',
+        listUrlPlaceholder: 'Letterboxd 或 TMDB 片单链接',
+        optMovie: '电影',
+        optSeries: '剧集',
+        addListBtn: '+ 验证并添加片单',
+        settingsTitle: '设置',
+        rpdbLabel: 'RPDB API 密钥',
+        rpdbPlaceholder: 'RPDB API 密钥 (选填)',
+        letterboxdLabel: 'Letterboxd 用户名',
+        letterboxdPlaceholder: 'Letterboxd 用户名 (选填)',
+        watchlist: '📌 待看清单',
+        diary: '🍿 观影记录',
+        trailers: '🎬 官方高清预告片',
+        installBtn: '🚀 安装到 Stremio',
+        copyBtn: '📋 复制清单链接',
+        copied: '✅ 已复制！',
+        noLists: '暂无自定义片单。',
+        validating: '⏳ 正在验证片单...',
+        verifiedSuccess: '✅ 片单验证成功！',
+        enterTitleError: '⚠️ 请输入片单名称。',
+        enterUrlError: '⚠️ 请输入有效的链接。'
+      }
+    };
+
+    let currentLang = 'en';
     let customLists = [];
+
+    function applyLanguage(lang) {
+      currentLang = I18N[lang] ? lang : 'en';
+      const t = I18N[currentLang];
+
+      document.getElementById('tTitle').innerText = t.title;
+      document.getElementById('tCatalogsTitle').innerText = t.catalogsTitle;
+      document.getElementById('tTrendingMovies').innerText = t.trendingMovies;
+      document.getElementById('tTrendingSeries').innerText = t.trendingSeries;
+      document.getElementById('tOscar').innerText = t.oscar;
+      document.getElementById('tTop250').innerText = t.top250;
+      document.getElementById('tCustomListTitle').innerText = t.customListTitle;
+      document.getElementById('newListTitle').placeholder = t.listTitlePlaceholder;
+      document.getElementById('newListUrl').placeholder = t.listUrlPlaceholder;
+      document.getElementById('tOptMovie').innerText = t.optMovie;
+      document.getElementById('tOptSeries').innerText = t.optSeries;
+      document.getElementById('addListBtn').innerText = t.addListBtn;
+      document.getElementById('tSettingsTitle').innerText = t.settingsTitle;
+      document.getElementById('tRpdbLabel').innerText = t.rpdbLabel;
+      document.getElementById('rpdbKey').placeholder = t.rpdbPlaceholder;
+      document.getElementById('tLetterboxdLabel').innerText = t.letterboxdLabel;
+      document.getElementById('letterboxdUser').placeholder = t.letterboxdPlaceholder;
+      document.getElementById('tWatchlist').innerText = t.watchlist;
+      document.getElementById('tDiary').innerText = t.diary;
+      document.getElementById('tTrailers').innerText = t.trailers;
+      document.getElementById('installBtn').innerText = t.installBtn;
+      document.getElementById('copyBtn').innerText = t.copyBtn;
+
+      renderCustomLists();
+      updateUrls();
+    }
 
     function renderCustomLists() {
       const container = document.getElementById('customListsContainer');
+      const t = I18N[currentLang];
       container.innerHTML = '';
 
       if (customLists.length === 0) {
-        container.innerHTML = '<div style="font-size:0.78rem; color:var(--text-muted); text-align:center; padding:4px;">Henüz özel bir liste eklenmedi.</div>';
+        container.innerHTML = `<div style="font-size:0.78rem; color:var(--text-muted); text-align:center; padding:4px;">${t.noLists}</div>`;
         return;
       }
 
@@ -363,9 +682,9 @@
         div.className = 'list-card';
         div.innerHTML = `
           <div class="list-info">
-            <span class="list-tag">${list.type === 'series' ? 'DİZİ' : 'FİLM'}</span>
+            <span class="list-tag">${list.type === 'series' ? t.optSeries.toUpperCase() : t.optMovie.toUpperCase()}</span>
             <span class="list-name">${escapeHtml(list.name)}</span>
-            ${list.count ? `<span class="list-count">(${list.count} film)</span>` : ''}
+            ${list.count ? `<span class="list-count">(${list.count})</span>` : ''}
           </div>
           <button type="button" class="btn-del" onclick="removeCustomList(${idx})">✕</button>
         `;
@@ -383,6 +702,7 @@
       const urlInput = document.getElementById('newListUrl');
       const msgDiv = document.getElementById('listValidationMsg');
       const btn = document.getElementById('addListBtn');
+      const t = I18N[currentLang];
 
       const name = titleInput.value.trim();
       const type = typeSelect.value;
@@ -393,19 +713,18 @@
 
       if (!name) {
         msgDiv.className = 'validation-msg error';
-        msgDiv.innerText = '⚠️ Lütfen liste için bir başlık girin.';
+        msgDiv.innerText = t.enterTitleError;
         return;
       }
 
       if (!url || (!url.startsWith('http://') && !url.startsWith('https://'))) {
         msgDiv.className = 'validation-msg error';
-        msgDiv.innerText = '⚠️ Lütfen geçerli bir bağlantı girin (https://letterboxd.com/... veya https://trakt.tv/...)';
+        msgDiv.innerText = t.enterUrlError;
         return;
       }
 
-      // Live Validation Check
       btn.disabled = true;
-      btn.innerText = '⏳ Liste Kontrol Ediliyor...';
+      btn.innerText = t.validating;
 
       try {
         const res = await fetch(`/api/validate-list?url=${encodeURIComponent(url)}`).then(r => r.json());
@@ -414,20 +733,20 @@
           titleInput.value = '';
           urlInput.value = '';
           msgDiv.className = 'validation-msg success';
-          msgDiv.innerText = `✅ Liste başarıyla doğrulandı (${res.count} yapım bulundu)!`;
+          msgDiv.innerText = `${t.verifiedSuccess} (${res.count})`;
           setTimeout(() => { msgDiv.style.display = 'none'; }, 3000);
           renderCustomLists();
           updateUrls();
         } else {
           msgDiv.className = 'validation-msg error';
-          msgDiv.innerText = `⚠️ ${res.error || 'Geçersiz liste bağlantısı!'}`;
+          msgDiv.innerText = `⚠️ ${res.error || 'Invalid list URL!'}`;
         }
       } catch (e) {
         msgDiv.className = 'validation-msg error';
-        msgDiv.innerText = '⚠️ Liste kontrol edilirken sunucu hatası oluştu.';
+        msgDiv.innerText = '⚠️ Server connection error.';
       } finally {
         btn.disabled = false;
-        btn.innerText = '+ Listeyi Doğrula ve Ekle';
+        btn.innerText = t.addListBtn;
       }
     }
 
@@ -449,14 +768,10 @@
       const enableLbxWatchlist = document.getElementById('enableLbxWatchlist').checked;
       const enableLbxDiary = document.getElementById('enableLbxDiary').checked;
 
-      const traktUser = document.getElementById('traktUser').value.trim();
-      const enableTraktWatchlist = document.getElementById('enableTraktWatchlist').checked;
-
-      // Toggle dynamic sub-switch visibility
       document.getElementById('lbxToggles').style.display = letterboxdUser ? 'block' : 'none';
-      document.getElementById('traktToggles').style.display = traktUser ? 'block' : 'none';
 
       const configObj = {
+        lang: currentLang,
         enableTrendingMovies,
         enableTrendingSeries,
         enableOscar,
@@ -466,8 +781,6 @@
         letterboxdUser,
         enableLbxWatchlist,
         enableLbxDiary,
-        traktUser,
-        enableTraktWatchlist,
         customLists
       };
 
@@ -482,6 +795,10 @@
       return manifestUrl;
     }
 
+    document.getElementById('langSelect').addEventListener('change', (e) => {
+      applyLanguage(e.target.value);
+    });
+
     document.getElementById('addListBtn').addEventListener('click', addCustomList);
 
     document.querySelectorAll('input, select').forEach(elem => {
@@ -490,16 +807,20 @@
     });
 
     document.getElementById('copyBtn').addEventListener('click', () => {
+      const t = I18N[currentLang];
       const url = updateUrls();
       navigator.clipboard.writeText(url).then(() => {
         const btn = document.getElementById('copyBtn');
-        btn.innerText = '✅ Kopyalandı!';
-        setTimeout(() => { btn.innerText = '📋 Manifest Linkini Kopyala'; }, 2000);
+        btn.innerText = t.copied;
+        setTimeout(() => { btn.innerText = t.copyBtn; }, 2000);
       });
     });
 
-    renderCustomLists();
-    updateUrls();
+    // Auto-detect browser language or default to Turkish/English
+    const browserLang = (navigator.language || 'en').split('-')[0];
+    const initialLang = I18N[browserLang] ? browserLang : 'en';
+    document.getElementById('langSelect').value = initialLang;
+    applyLanguage(initialLang);
   </script>
 </body>
 </html>
