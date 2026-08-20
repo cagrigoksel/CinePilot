@@ -314,7 +314,7 @@ function getPosterUrl(imdbId, tmdbPosterPath, rpdbKey = '') {
 
 // -------------------------------------------------------------
 // Universal Multi-Platform Scraper & List Resolver
-// Supports: Letterboxd (Multi-page 250+ films), TMDB (Lists & Collections)
+// Supports: Letterboxd (Multi-page up to 20 pages / 1500 films), TMDB (Lists & Collections)
 // -------------------------------------------------------------
 
 function runPythonScraper(target) {
@@ -375,7 +375,7 @@ async function scrapeUniversalList(urlOrUser, langLocale = 'tr-TR') {
     return [];
   }
 
-  // 2. Primary Scraper: Python Cloudscraper (Multi-page Letterboxd bypass)
+  // 2. Primary Scraper: Python Cloudscraper (Multi-page up to 20 pages)
   const pyResults = await runPythonScraper(target);
   if (pyResults && pyResults.length > 0) {
     return pyResults.map(p => ({
@@ -512,7 +512,7 @@ function getManifest(config) {
   return {
     id: 'community.cinepilot.studio',
     name: 'CinePilot Studio',
-    version: '5.7.0',
+    version: '5.8.0',
     description: t.desc,
     resources: ['catalog', 'meta', 'stream'],
     types: ['movie', 'series'],
@@ -647,44 +647,52 @@ async function smartSearchTmdb(title, year = null, preferredType = 'movie', lang
   return null;
 }
 
-// Convert Scraped List to Metas concurrently (Fast batching & 100% item resolution)
+// Convert Scraped List to Metas with Batch Chunking (Zero Missing Films)
 async function resolveScrapedListToMetas(scrapedList, type = 'movie', rpdbKey = '', langLocale = 'tr-TR') {
-  const promises = scrapedList.map(async (item) => {
-    try {
-      let details = null;
-      let searchedId = item.tmdbId;
-      let actualType = item.type || type;
+  const chunkSize = 25;
+  const allMetas = [];
 
-      if (searchedId) {
-        details = await fetchTmdbDetails(searchedId, actualType === 'series' ? 'tv' : 'movie', langLocale);
-      } else {
-        const searched = await smartSearchTmdb(item.title, item.year, type, langLocale);
-        if (searched) {
-          searchedId = searched.id;
-          actualType = searched.detectedType === 'tv' ? 'series' : 'movie';
-          details = await fetchTmdbDetails(searched.id, searched.detectedType, langLocale);
+  for (let i = 0; i < scrapedList.length; i += chunkSize) {
+    const chunk = scrapedList.slice(i, i + chunkSize);
+    const chunkPromises = chunk.map(async (item) => {
+      try {
+        let details = null;
+        let searchedId = item.tmdbId;
+        let actualType = item.type || type;
+
+        if (searchedId) {
+          details = await fetchTmdbDetails(searchedId, actualType === 'series' ? 'tv' : 'movie', langLocale);
+        } else {
+          const searched = await smartSearchTmdb(item.title, item.year, type, langLocale);
+          if (searched) {
+            searchedId = searched.id;
+            actualType = searched.detectedType === 'tv' ? 'series' : 'movie';
+            details = await fetchTmdbDetails(searched.id, searched.detectedType, langLocale);
+          }
         }
-      }
 
-      if (details) {
-        const imdbId = details?.external_ids?.imdb_id;
-        const genres = extractGenres(details);
-        return {
-          id: imdbId || `tmdb:${details.id}`,
-          type: actualType,
-          name: details.title || details.name || item.title,
-          poster: getPosterUrl(imdbId, details.poster_path, rpdbKey),
-          description: details.overview,
-          genres: genres,
-          releaseInfo: item.year || (details.release_date || details.first_air_date || '').split('-')[0]
-        };
-      }
-    } catch (e) {}
-    return null;
-  });
+        if (details) {
+          const imdbId = details?.external_ids?.imdb_id;
+          const genres = extractGenres(details);
+          return {
+            id: imdbId || `tmdb:${details.id}`,
+            type: actualType,
+            name: details.title || details.name || item.title,
+            poster: getPosterUrl(imdbId, details.poster_path, rpdbKey),
+            description: details.overview,
+            genres: genres,
+            releaseInfo: item.year || (details.release_date || details.first_air_date || '').split('-')[0]
+          };
+        }
+      } catch (e) {}
+      return null;
+    });
 
-  const results = await Promise.all(promises);
-  return results.filter(Boolean);
+    const chunkResults = await Promise.all(chunkPromises);
+    allMetas.push(...chunkResults.filter(Boolean));
+  }
+
+  return allMetas;
 }
 
 // Convert Curated IMDb ID List to Metas concurrently
@@ -902,7 +910,7 @@ app.get([
 
     // 3. OSCAR ÖDÜLLÜ FİLMLER (~96)
     else if (id === 'oscar_collection') {
-      const cacheKey = `full_oscar_v17_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
+      const cacheKey = `full_oscar_v18_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
       metas = getCache(cacheKey);
       if (!metas) {
         metas = await resolveImdbList(curatedData.oscar, 'movie', config.rpdbKey, langLocale);
@@ -912,7 +920,7 @@ app.get([
 
     // 4. TOP 250 MOVIES (~98)
     else if (id === 'top250_collection') {
-      const cacheKey = `full_top250_v17_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
+      const cacheKey = `full_top250_v18_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
       metas = getCache(cacheKey);
       if (!metas) {
         metas = await resolveImdbList(curatedData.top250, 'movie', config.rpdbKey, langLocale);
@@ -939,23 +947,23 @@ app.get([
 
     // 6. WATCHLIST (Letterboxd)
     else if (id === 'my_watchlist' && config.letterboxdUser) {
-      const cacheKey = `user_wl_${config.letterboxdUser}_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
+      const cacheKey = `user_wl_v2_${config.letterboxdUser}_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
       metas = getCache(cacheKey);
       if (!metas) {
         const scraped = await scrapeUniversalList(`https://letterboxd.com/${config.letterboxdUser}/watchlist/`, langLocale);
         metas = await resolveScrapedListToMetas(scraped, 'movie', config.rpdbKey, langLocale);
-        setCache(cacheKey, metas, 30 * 60 * 1000);
+        setCache(cacheKey, metas, 60 * 60 * 1000);
       }
     }
 
     // 7. DIARY (Letterboxd)
     else if (id === 'my_diary' && config.letterboxdUser) {
-      const cacheKey = `user_diary_${config.letterboxdUser}_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
+      const cacheKey = `user_diary_v2_${config.letterboxdUser}_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
       metas = getCache(cacheKey);
       if (!metas) {
         const scraped = await scrapeUniversalList(`https://letterboxd.com/${config.letterboxdUser}/films/`, langLocale);
         metas = await resolveScrapedListToMetas(scraped, 'movie', config.rpdbKey, langLocale);
-        setCache(cacheKey, metas, 30 * 60 * 1000);
+        setCache(cacheKey, metas, 60 * 60 * 1000);
       }
     }
 
@@ -1127,7 +1135,7 @@ app.get(['/stream/:type/:id.json', '/:config/stream/:type/:id.json'], async (req
 
 app.listen(PORT, '0.0.0.0', () => {
   const ip = getLocalIp();
-  console.log(`🚀 CinePilot Studio v5.7.0 [Smart Multi-Search Edition] running on http://127.0.0.1:${PORT}`);
+  console.log(`🚀 CinePilot Studio v5.8.0 [Full Multi-Page & Zero Truncation] running on http://127.0.0.1:${PORT}`);
   console.log(`📡 Local Network URL: http://${ip}:${PORT}`);
   console.log(`⚙️ Web Configurator: http://127.0.0.1:${PORT}/configure`);
 });

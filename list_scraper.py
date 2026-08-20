@@ -4,7 +4,7 @@ import json
 import sys
 import urllib.parse
 
-def scrape_letterboxd_url(url, max_pages=5):
+def scrape_letterboxd_url(url, max_pages=20):
     scraper = cloudscraper.create_scraper()
     all_films = []
     
@@ -54,30 +54,11 @@ def scrape_letterboxd_url(url, max_pages=5):
             
     return all_films
 
-def scrape_trakt_url(url):
-    scraper = cloudscraper.create_scraper()
-    all_items = []
-    try:
-        res = scraper.get(url, timeout=12)
-        if res.status_code == 200:
-            # Match Trakt list titles
-            titles = re.findall(r'<meta property=\"og:title\" content=\"([^\"]+)\"', res.text)
-            # Find item titles in list
-            items = re.findall(r'class=\"[^\"]*titles[^\"]*\"[^>]*>[\s\S]*?<h3><a[^>]*>([^<]+)</a>\s*(?:<span class=\"year\">\(?(\d{4})\)?</span>)?', res.text)
-            for it in items:
-                all_items.append({'title': it[0].strip(), 'year': it[1] if it[1] else None})
-    except Exception:
-        pass
-    return all_items
-
 def scrape_universal_list(url_or_user, list_type='letterboxd'):
     if 'letterboxd.com' in url_or_user or list_type == 'letterboxd':
         url = url_or_user if url_or_user.startswith('http') else f"https://letterboxd.com/{url_or_user}/watchlist/"
         return scrape_letterboxd_url(url)
-    elif 'trakt.tv' in url_or_user:
-        return scrape_trakt_url(url_or_user)
     else:
-        # Fallback treat as letterboxd username or URL
         return scrape_letterboxd_url(url_or_user if url_or_user.startswith('http') else f"https://letterboxd.com/{url_or_user}/watchlist/")
 
 if __name__ == '__main__':
