@@ -3,29 +3,11 @@ const path = require('path');
 const os = require('os');
 const fs = require('fs');
 const https = require('https');
-const { spawn, execSync } = require('child_process');
 
 const app = express();
 const PORT = process.env.PORT || 7050;
 
 const TMDB_API_KEY = process.env.TMDB_API_KEY || 'caad8d4dace6ad77f0e22f5b746d5a20';
-
-// Ensure Python dependencies (cloudscraper) exist on server startup
-function ensurePythonDependencies() {
-  try {
-    execSync('python3 -c "import cloudscraper"', { stdio: 'ignore' });
-    console.log('🐍 Python cloudscraper engine is active and ready.');
-  } catch (e) {
-    console.log('📦 Installing python scraping dependencies (cloudscraper)...');
-    try {
-      execSync('python3 -m pip install --break-system-packages cloudscraper beautifulsoup4 requests || pip3 install --user cloudscraper beautifulsoup4 requests || pip install cloudscraper beautifulsoup4 requests', { stdio: 'inherit' });
-      console.log('✅ Python dependencies successfully installed!');
-    } catch (err) {
-      console.error('⚠️ Warning: Could not install python dependencies:', err.message);
-    }
-  }
-}
-ensurePythonDependencies();
 
 // Load Curated Lists
 const curatedData = JSON.parse(fs.readFileSync(path.join(__dirname, 'curated_lists.json'), 'utf8'));
@@ -330,34 +312,56 @@ function getPosterUrl(imdbId, tmdbPosterPath, rpdbKey = '') {
 }
 
 // -------------------------------------------------------------
-// Universal Multi-Platform Scraper & List Resolver
-// Supports: Letterboxd (Multi-page period engine), TMDB (Lists & Collections)
+// Pure Node.js Multi-Page Letterboxd Scraper (Powered by got-scraping)
 // -------------------------------------------------------------
 
-function runPythonScraper(target) {
-  return new Promise((resolve) => {
-    const scriptPath = path.join(__dirname, 'list_scraper.py');
-    const py = spawn('python3', [scriptPath, target], { timeout: 60000 });
+async function scrapeLetterboxdNode(targetUrl, maxPages = 20) {
+  const { gotScraping } = await import('got-scraping');
+  const allFilms = [];
+  const seen = new Set();
+  const cleanUrl = targetUrl.replace(/\/+$/, '');
 
-    let output = '';
-    let errOutput = '';
-    py.stdout.on('data', (d) => { output += d.toString(); });
-    py.stderr.on('data', (d) => { errOutput += d.toString(); });
-    py.on('close', (code) => {
-      if (errOutput) console.log('Python scraper log:', errOutput.slice(0, 150));
+  for (let page = 1; page <= maxPages; page++) {
+    const pageUrl = page === 1 ? cleanUrl + '/' : cleanUrl + '/page/' + page + '/';
+    let res = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        const json = JSON.parse(output.trim());
-        resolve(Array.isArray(json) ? json : []);
+        res = await gotScraping(pageUrl);
+        if (res.statusCode === 200) break;
       } catch (e) {
-        console.error('Python scraper parse error. Output was:', output.slice(0, 100));
-        resolve([]);
+        await new Promise(r => setTimeout(r, 400));
       }
-    });
-    py.on('error', (err) => {
-      console.error('Python spawn error:', err.message);
-      resolve([]);
-    });
-  });
+    }
+
+    if (!res || res.statusCode !== 200) break;
+
+    const matches = [...res.body.matchAll(/data-item-name=\"([^\"]+)\"/g)].map(x => x[1]);
+    if (matches.length === 0) {
+      const altMatches = [...res.body.matchAll(/class=\"[^\"]*film-poster[^\"]*\"[^>]*alt=\"([^\"]+)\"/g)].map(x => x[1]);
+      if (altMatches.length > 0) {
+        for (const raw of altMatches) {
+          if (seen.has(raw)) continue;
+          seen.add(raw);
+          const ym = raw.match(/\((\d{4})\)$/);
+          const year = ym ? ym[1] : null;
+          const title = decodeHtmlEntities(raw.replace(/\s*\(\d{4}\)$/, '').trim());
+          if (title) allFilms.push({ title, year });
+        }
+      }
+      break;
+    }
+
+    for (const raw of matches) {
+      if (seen.has(raw)) continue;
+      seen.add(raw);
+      const ym = raw.match(/\((\d{4})\)$/);
+      const year = ym ? ym[1] : null;
+      const title = decodeHtmlEntities(raw.replace(/\s*\(\d{4}\)$/, '').trim());
+      if (title) allFilms.push({ title, year });
+    }
+  }
+
+  return allFilms;
 }
 
 async function scrapeUniversalList(urlOrUser, langLocale = 'tr-TR') {
@@ -398,43 +402,22 @@ async function scrapeUniversalList(urlOrUser, langLocale = 'tr-TR') {
     return [];
   }
 
-  // 2. Primary Scraper: Python Cloudscraper (Period & Multi-page Engine)
-  const pyResults = await runPythonScraper(target);
-  if (pyResults && pyResults.length > 0) {
-    return pyResults.map(p => ({
-      ...p,
-      title: decodeHtmlEntities(p.title)
-    }));
-  }
-
-  // 3. Fallback Scraper: Native Node.js Fetch
-  let baseTarget = target;
+  // 2. Primary Scraper: Pure Node.js with got-scraping (Bypasses Cloudflare on all pages)
+  let targetUrl = target;
   if (!target.startsWith('http')) {
-    baseTarget = `https://letterboxd.com/${target}/watchlist/`;
+    targetUrl = `https://letterboxd.com/${target}/watchlist/`;
   }
 
-  const allFilms = [];
   try {
-    const res = await fetch(baseTarget, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-      },
-      signal: AbortSignal.timeout(8000)
-    });
-    if (res.ok) {
-      const html = await res.text();
-      const matches = [...html.matchAll(/data-item-name=\"([^\"]+)\"/g)].map(m => m[1]);
-      for (const raw of matches) {
-        const yearMatch = raw.match(/\((\d{4})\)$/);
-        const year = yearMatch ? yearMatch[1] : null;
-        const title = decodeHtmlEntities(raw.replace(/\s*\(\d{4}\)$/, '').trim());
-        if (title) allFilms.push({ title, year });
-      }
+    const results = await scrapeLetterboxdNode(targetUrl, 20);
+    if (results && results.length > 0) {
+      return results;
     }
-  } catch (e) {}
+  } catch (e) {
+    console.error('Scrape error:', e.message);
+  }
 
-  return allFilms;
+  return [];
 }
 
 // -------------------------------------------------------------
@@ -535,7 +518,7 @@ function getManifest(config) {
   return {
     id: 'community.cinepilot.studio',
     name: 'CinePilot Studio',
-    version: '5.9.0',
+    version: '6.0.0',
     description: t.desc,
     resources: ['catalog', 'meta', 'stream'],
     types: ['movie', 'series'],
@@ -933,7 +916,7 @@ app.get([
 
     // 3. OSCAR ÖDÜLLÜ FİLMLER (~96)
     else if (id === 'oscar_collection') {
-      const cacheKey = `full_oscar_v19_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
+      const cacheKey = `full_oscar_v20_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
       metas = getCache(cacheKey);
       if (!metas) {
         metas = await resolveImdbList(curatedData.oscar, 'movie', config.rpdbKey, langLocale);
@@ -943,7 +926,7 @@ app.get([
 
     // 4. TOP 250 MOVIES (~98)
     else if (id === 'top250_collection') {
-      const cacheKey = `full_top250_v19_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
+      const cacheKey = `full_top250_v20_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
       metas = getCache(cacheKey);
       if (!metas) {
         metas = await resolveImdbList(curatedData.top250, 'movie', config.rpdbKey, langLocale);
@@ -957,7 +940,7 @@ app.get([
       const customList = config.customLists && config.customLists[idx];
 
       if (customList && customList.url) {
-        const cacheKey = `custom_list_v19_${idx}_${encodeURIComponent(customList.url)}_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
+        const cacheKey = `custom_list_v20_${idx}_${encodeURIComponent(customList.url)}_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
         metas = getCache(cacheKey);
 
         if (!metas) {
@@ -970,7 +953,7 @@ app.get([
 
     // 6. WATCHLIST (Letterboxd)
     else if (id === 'my_watchlist' && config.letterboxdUser) {
-      const cacheKey = `user_wl_v3_${config.letterboxdUser}_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
+      const cacheKey = `user_wl_v20_${config.letterboxdUser}_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
       metas = getCache(cacheKey);
       if (!metas) {
         const scraped = await scrapeUniversalList(`https://letterboxd.com/${config.letterboxdUser}/watchlist/`, langLocale);
@@ -981,7 +964,7 @@ app.get([
 
     // 7. DIARY (Letterboxd)
     else if (id === 'my_diary' && config.letterboxdUser) {
-      const cacheKey = `user_diary_v3_${config.letterboxdUser}_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
+      const cacheKey = `user_diary_v20_${config.letterboxdUser}_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
       metas = getCache(cacheKey);
       if (!metas) {
         const scraped = await scrapeUniversalList(`https://letterboxd.com/${config.letterboxdUser}/films/`, langLocale);
@@ -1158,7 +1141,7 @@ app.get(['/stream/:type/:id.json', '/:config/stream/:type/:id.json'], async (req
 
 app.listen(PORT, '0.0.0.0', () => {
   const ip = getLocalIp();
-  console.log(`🚀 CinePilot Studio v5.9.0 [Full Auto-Dependency Engine] running on http://127.0.0.1:${PORT}`);
+  console.log(`🚀 CinePilot Studio v6.0.0 [Pure Node.js High-Speed Engine] running on http://127.0.0.1:${PORT}`);
   console.log(`📡 Local Network URL: http://${ip}:${PORT}`);
   console.log(`⚙️ Web Configurator: http://127.0.0.1:${PORT}/configure`);
 });
