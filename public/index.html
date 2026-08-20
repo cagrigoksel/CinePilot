@@ -14,6 +14,7 @@
       --border: rgba(255, 255, 255, 0.1);
       --primary: #7a5af8;
       --primary-hover: #9373f9;
+      --accent-green: #00d26a;
       --accent-danger: #f85149;
       --text: #f0f6fc;
       --text-muted: #8b949e;
@@ -65,7 +66,6 @@
       border: 1px solid var(--border);
       border-radius: 12px;
       margin-bottom: 8px;
-      transition: border-color 0.2s;
     }
     .switch-row.sub-switch {
       margin-left: 12px;
@@ -103,7 +103,7 @@
     input:checked + .slider { background-color: var(--primary); }
     input:checked + .slider:before { transform: translateX(20px); }
 
-    /* Custom List Builder */
+    /* Custom List Box */
     .custom-list-box {
       background: rgba(13, 17, 23, 0.6);
       border: 1px dashed rgba(255, 255, 255, 0.15);
@@ -145,6 +145,27 @@
       transition: background 0.2s;
     }
     .btn-add:hover { background: var(--primary); }
+    .btn-add:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .validation-msg {
+      font-size: 0.8rem;
+      margin-top: 6px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      display: none;
+    }
+    .validation-msg.error {
+      display: block;
+      background: rgba(248, 81, 73, 0.15);
+      color: var(--accent-danger);
+      border: 1px solid rgba(248, 81, 73, 0.3);
+    }
+    .validation-msg.success {
+      display: block;
+      background: rgba(0, 210, 106, 0.15);
+      color: var(--accent-green);
+      border: 1px solid rgba(0, 210, 106, 0.3);
+    }
 
     .list-container {
       display: flex;
@@ -166,6 +187,7 @@
     .list-info { display: flex; align-items: center; gap: 8px; overflow: hidden; }
     .list-name { font-weight: 600; }
     .list-tag { font-size: 0.7rem; padding: 2px 6px; background: rgba(255,255,255,0.1); border-radius: 4px; }
+    .list-count { font-size: 0.75rem; color: var(--accent-green); }
     .btn-del {
       background: none;
       border: none;
@@ -209,7 +231,7 @@
       <h1>CinePilot Studio</h1>
     </div>
 
-    <!-- 1. Küratörlük Listeleri -->
+    <!-- 1. Kataloglar -->
     <div class="section-title">Kataloglar</div>
     
     <div class="switch-row">
@@ -244,23 +266,24 @@
       </label>
     </div>
 
-    <!-- 2. Özel Liste Ekleme -->
+    <!-- 2. Özel Liste Ekleme (Doğrulama Destekli) -->
     <div class="section-title">Özel Liste Ekle</div>
     <div class="custom-list-box">
       <div class="input-grid">
-        <input type="text" id="newListTitle" placeholder="Liste Başlığı">
+        <input type="text" id="newListTitle" placeholder="Liste Başlığı (Örn: MCU Kronolojik)">
         <select id="newListType">
           <option value="movie">Film</option>
           <option value="series">Dizi</option>
         </select>
       </div>
-      <input type="text" id="newListUrl" placeholder="Letterboxd veya Trakt Liste Linki" style="margin-bottom: 8px;">
-      <button type="button" class="btn-add" id="addListBtn">+ Listeyi Ekle</button>
+      <input type="text" id="newListUrl" placeholder="Letterboxd veya Trakt Liste Linki">
+      <div id="listValidationMsg" class="validation-msg"></div>
+      <button type="button" class="btn-add" id="addListBtn" style="margin-top: 8px;">+ Listeyi Doğrula ve Ekle</button>
 
       <div class="list-container" id="customListsContainer"></div>
     </div>
 
-    <!-- 3. Ayarlar & Entegrasyonlar -->
+    <!-- 3. Ayarlar & API Anahtarları -->
     <div class="section-title">Ayarlar</div>
     
     <div class="form-group">
@@ -342,6 +365,7 @@
           <div class="list-info">
             <span class="list-tag">${list.type === 'series' ? 'DİZİ' : 'FİLM'}</span>
             <span class="list-name">${escapeHtml(list.name)}</span>
+            ${list.count ? `<span class="list-count">(${list.count} film)</span>` : ''}
           </div>
           <button type="button" class="btn-del" onclick="removeCustomList(${idx})">✕</button>
         `;
@@ -353,26 +377,58 @@
       return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     }
 
-    function addCustomList() {
+    async function addCustomList() {
       const titleInput = document.getElementById('newListTitle');
       const typeSelect = document.getElementById('newListType');
       const urlInput = document.getElementById('newListUrl');
+      const msgDiv = document.getElementById('listValidationMsg');
+      const btn = document.getElementById('addListBtn');
 
       const name = titleInput.value.trim();
       const type = typeSelect.value;
       const url = urlInput.value.trim();
 
-      if (!name || !url) {
-        alert('Lütfen liste başlığı ve geçerli bir liste linki girin.');
+      msgDiv.className = 'validation-msg';
+      msgDiv.style.display = 'none';
+
+      if (!name) {
+        msgDiv.className = 'validation-msg error';
+        msgDiv.innerText = '⚠️ Lütfen liste için bir başlık girin.';
         return;
       }
 
-      customLists.push({ name, type, url });
-      titleInput.value = '';
-      urlInput.value = '';
+      if (!url || (!url.startsWith('http://') && !url.startsWith('https://'))) {
+        msgDiv.className = 'validation-msg error';
+        msgDiv.innerText = '⚠️ Lütfen geçerli bir bağlantı girin (https://letterboxd.com/... veya https://trakt.tv/...)';
+        return;
+      }
 
-      renderCustomLists();
-      updateUrls();
+      // Live Validation Check
+      btn.disabled = true;
+      btn.innerText = '⏳ Liste Kontrol Ediliyor...';
+
+      try {
+        const res = await fetch(`/api/validate-list?url=${encodeURIComponent(url)}`).then(r => r.json());
+        if (res.valid) {
+          customLists.push({ name, type, url, count: res.count });
+          titleInput.value = '';
+          urlInput.value = '';
+          msgDiv.className = 'validation-msg success';
+          msgDiv.innerText = `✅ Liste başarıyla doğrulandı (${res.count} yapım bulundu)!`;
+          setTimeout(() => { msgDiv.style.display = 'none'; }, 3000);
+          renderCustomLists();
+          updateUrls();
+        } else {
+          msgDiv.className = 'validation-msg error';
+          msgDiv.innerText = `⚠️ ${res.error || 'Geçersiz liste bağlantısı!'}`;
+        }
+      } catch (e) {
+        msgDiv.className = 'validation-msg error';
+        msgDiv.innerText = '⚠️ Liste kontrol edilirken sunucu hatası oluştu.';
+      } finally {
+        btn.disabled = false;
+        btn.innerText = '+ Listeyi Doğrula ve Ekle';
+      }
     }
 
     function removeCustomList(idx) {
