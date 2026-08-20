@@ -7,7 +7,7 @@ const https = require('https');
 const app = express();
 const PORT = process.env.PORT || 7050;
 
-const TMDB_API_KEY = 'caad8d4dace6ad77f0e22f5b746d5a20';
+const TMDB_API_KEY = process.env.TMDB_API_KEY || 'caad8d4dace6ad77f0e22f5b746d5a20';
 
 // Load Curated Lists
 const curatedData = JSON.parse(fs.readFileSync(path.join(__dirname, 'curated_lists.json'), 'utf8'));
@@ -206,13 +206,50 @@ function getPosterUrl(imdbId, tmdbPosterPath, rpdbKey = '') {
 }
 
 // -------------------------------------------------------------
-// Native Node.js Universal List Scraper (Zero Python Dependency)
+// Universal Multi-Platform Scraper & List Resolver
+// Supports: Letterboxd, TMDB (Lists & Collections), Trakt
 // -------------------------------------------------------------
 
 async function scrapeUniversalList(urlOrUser, maxPages = 5) {
   const target = urlOrUser.trim();
-  let baseTarget = target;
 
+  // 1. TMDB Platform Resolution
+  if (target.includes('themoviedb.org')) {
+    const listMatch = target.match(/\/list\/(\d+)/);
+    const collectionMatch = target.match(/\/collection\/(\d+)/);
+
+    if (listMatch) {
+      const listId = listMatch[1];
+      try {
+        const res = await fetch(`https://api.themoviedb.org/3/list/${listId}?api_key=${TMDB_API_KEY}&language=tr-TR`).then(r => r.json());
+        if (res.items && Array.isArray(res.items)) {
+          return res.items.map(i => ({
+            title: i.title || i.name,
+            year: (i.release_date || i.first_air_date || '').split('-')[0],
+            tmdbId: i.id,
+            type: i.media_type || (i.title ? 'movie' : 'series')
+          }));
+        }
+      } catch (e) {}
+    } else if (collectionMatch) {
+      const colId = collectionMatch[1];
+      try {
+        const res = await fetch(`https://api.themoviedb.org/3/collection/${colId}?api_key=${TMDB_API_KEY}&language=tr-TR`).then(r => r.json());
+        if (res.parts && Array.isArray(res.parts)) {
+          return res.parts.map(i => ({
+            title: i.title,
+            year: (i.release_date || '').split('-')[0],
+            tmdbId: i.id,
+            type: 'movie'
+          }));
+        }
+      } catch (e) {}
+    }
+    return [];
+  }
+
+  // 2. Letterboxd Platform Resolution (Native Node.js)
+  let baseTarget = target;
   if (!target.startsWith('http')) {
     baseTarget = `https://letterboxd.com/${target}/watchlist/`;
   }
@@ -235,7 +272,7 @@ async function scrapeUniversalList(urlOrUser, maxPages = 5) {
       if (!res.ok) break;
       const html = await res.text();
 
-      // Extract Letterboxd data-item-name="Title (Year)"
+      // Extract data-item-name="Title (Year)"
       const matches = [...html.matchAll(/data-item-name=\"([^\"]+)\"/g)].map(m => m[1]);
 
       if (matches && matches.length > 0) {
@@ -248,7 +285,7 @@ async function scrapeUniversalList(urlOrUser, maxPages = 5) {
           }
         }
       } else {
-        // Fallback to poster alt tags
+        // Fallback to poster alt attributes
         const altMatches = [...html.matchAll(/class=\"[^\"]*film-poster[^\"]*\"[^>]*alt=\"([^\"]+)\"/g)].map(m => m[1]);
         if (altMatches && altMatches.length > 0) {
           for (const raw of altMatches) {
@@ -325,7 +362,7 @@ function getManifest(config) {
     });
   }
 
-  // 5. User Defined Custom Lists (Letterboxd / Trakt / IMDb)
+  // 5. User Defined Custom Lists (Letterboxd / TMDB / Trakt)
   if (Array.isArray(config.customLists)) {
     config.customLists.forEach((list, idx) => {
       const type = list.type === 'series' ? 'series' : 'movie';
@@ -379,8 +416,8 @@ function getManifest(config) {
   return {
     id: 'community.cinepilot.studio',
     name: 'CinePilot Studio',
-    version: '5.3.0',
-    description: 'Modüler Stremio Katalog Oluşturucu, Trendler, Oscar, Top 250, Özel Letterboxd & Trakt Listeleri ve Fragmanlar.',
+    version: '5.4.0',
+    description: 'Modüler Stremio Katalog Oluşturucu, Trendler, Oscar, Top 250, Özel Letterboxd / TMDB / Trakt Listeleri ve Fragmanlar.',
     resources: ['catalog', 'meta', 'stream'],
     types: ['movie', 'series'],
     catalogs: catalogs,
@@ -494,19 +531,30 @@ async function resolveScrapedListToMetas(scrapedList, type = 'movie', rpdbKey = 
 
   const promises = scrapedList.map(async (item) => {
     try {
-      const searched = await searchTmdb(item.title, item.year, endpointType);
-      if (searched) {
-        const details = await fetchTmdbDetails(searched.id, endpointType);
+      let details = null;
+      let searchedId = item.tmdbId;
+
+      if (searchedId) {
+        details = await fetchTmdbDetails(searchedId, endpointType);
+      } else {
+        const searched = await searchTmdb(item.title, item.year, endpointType);
+        if (searched) {
+          searchedId = searched.id;
+          details = await fetchTmdbDetails(searched.id, endpointType);
+        }
+      }
+
+      if (details) {
         const imdbId = details?.external_ids?.imdb_id;
         const genres = extractGenres(details);
         return {
-          id: imdbId || `tmdb:${searched.id}`,
+          id: imdbId || `tmdb:${details.id}`,
           type: type,
-          name: item.title,
-          poster: getPosterUrl(imdbId, searched.poster_path, rpdbKey),
-          description: searched.overview,
+          name: details.title || details.name || item.title,
+          poster: getPosterUrl(imdbId, details.poster_path, rpdbKey),
+          description: details.overview,
           genres: genres,
-          releaseInfo: item.year || (searched.release_date || searched.first_air_date || '').split('-')[0]
+          releaseInfo: item.year || (details.release_date || details.first_air_date || '').split('-')[0]
         };
       }
     } catch (e) {}
@@ -640,7 +688,7 @@ app.get('/api/validate-list', async (req, res) => {
     if (items.length > 0) {
       return res.json({ valid: true, count: items.length, sample: items.slice(0, 3).map(i => i.title) });
     } else {
-      return res.json({ valid: false, error: 'Bu bağlantıdan liste verisi çekilemedi. Bağlantının herkese açık (public) bir Letterboxd veya Trakt listesi olduğundan emin olun.' });
+      return res.json({ valid: false, error: 'Bu bağlantıdan liste verisi çekilemedi. Bağlantının herkese açık bir Letterboxd, TMDB veya Trakt listesi olduğundan emin olun.' });
     }
   } catch (err) {
     return res.json({ valid: false, error: 'Liste kontrol edilirken hata: ' + err.message });
@@ -727,7 +775,7 @@ app.get([
 
     // 3. OSCAR ÖDÜLLÜ FİLMLER (~96)
     else if (id === 'oscar_collection') {
-      const cacheKey = `full_oscar_v12_${config.rpdbKey || 'no_rpdb'}`;
+      const cacheKey = `full_oscar_v14_${config.rpdbKey || 'no_rpdb'}`;
       metas = getCache(cacheKey);
       if (!metas) {
         metas = await resolveImdbList(curatedData.oscar, 'movie', config.rpdbKey);
@@ -737,7 +785,7 @@ app.get([
 
     // 4. TOP 250 MOVIES (~98)
     else if (id === 'top250_collection') {
-      const cacheKey = `full_top250_v12_${config.rpdbKey || 'no_rpdb'}`;
+      const cacheKey = `full_top250_v14_${config.rpdbKey || 'no_rpdb'}`;
       metas = getCache(cacheKey);
       if (!metas) {
         metas = await resolveImdbList(curatedData.top250, 'movie', config.rpdbKey);
@@ -745,7 +793,7 @@ app.get([
       }
     }
 
-    // 5. USER DEFINED CUSTOM LISTS (e.g. custom_0, custom_1)
+    // 5. USER DEFINED CUSTOM LISTS (Letterboxd / TMDB / Trakt)
     else if (id.startsWith('custom_')) {
       const idx = parseInt(id.split('_')[1], 10);
       const customList = config.customLists && config.customLists[idx];
@@ -956,7 +1004,7 @@ app.get(['/stream/:type/:id.json', '/:config/stream/:type/:id.json'], async (req
 
 app.listen(PORT, '0.0.0.0', () => {
   const ip = getLocalIp();
-  console.log(`🚀 CinePilot Studio v5.3.0 running on http://127.0.0.1:${PORT}`);
+  console.log(`🚀 CinePilot Studio v5.4.0 running on http://127.0.0.1:${PORT}`);
   console.log(`📡 Local Network URL: http://${ip}:${PORT}`);
   console.log(`⚙️ Web Configurator: http://127.0.0.1:${PORT}/configure`);
 });
