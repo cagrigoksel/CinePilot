@@ -9,10 +9,6 @@ const app = express();
 const PORT = process.env.PORT || 7050;
 
 const TMDB_API_KEY = 'caad8d4dace6ad77f0e22f5b746d5a20';
-const RPDB_KEY = 't0-free-rpdb';
-
-// Load Curated Lists
-const curatedData = JSON.parse(fs.readFileSync(path.join(__dirname, 'curated_lists.json'), 'utf8'));
 
 // Cache memory
 const cache = new Map();
@@ -56,9 +52,12 @@ function getLocalIp() {
 
 function parseConfig(configStr) {
   const defaults = {
-    letterboxdUser: 'cagrigoksel',
-    useRpdb: true,
-    enableTrailers: true
+    enableTrendingMovies: true,
+    enableTrendingSeries: true,
+    enableTrailers: true,
+    rpdbKey: '',
+    letterboxdUser: '',
+    customLists: []
   };
 
   if (!configStr || configStr === 'manifest.json') return defaults;
@@ -74,7 +73,7 @@ function parseConfig(configStr) {
   }
 }
 
-// ONLY Pure Genres in 3rd dropdown
+// ONLY Pure Genres in dropdowns
 const PURE_MOVIE_GENRES = [
   "Tümü",
   "Aksiyon",
@@ -188,13 +187,27 @@ function matchesGenre(itemGenres, selectedGenre) {
   });
 }
 
-// Manifest with Pure Free TV Series & Search Support
-function getManifest(config) {
-  const user = config.letterboxdUser || 'cagrigoksel';
+// Poster URL Generator with User's Own RPDB Key or TMDB Fallback
+function getPosterUrl(imdbId, tmdbPosterPath, rpdbKey = '') {
+  if (rpdbKey && rpdbKey.trim() !== '' && imdbId && imdbId.startsWith('tt')) {
+    return `https://api.ratingposterdb.com/${rpdbKey.trim()}/imdb/poster-default/${imdbId}.jpg`;
+  }
+  if (tmdbPosterPath) {
+    return `https://image.tmdb.org/t/p/w500${tmdbPosterPath}`;
+  }
+  return 'https://images.metahub.space/poster/medium/no_poster.png';
+}
 
-  const catalogs = [
-    // 1. Haftalık Trend Filmler
-    {
+// -------------------------------------------------------------
+// Manifest Builder (Modular & Dynamic)
+// -------------------------------------------------------------
+
+function getManifest(config) {
+  const catalogs = [];
+
+  // 1. Default Template: Haftalık Trend Filmler (if enabled)
+  if (config.enableTrendingMovies !== false) {
+    catalogs.push({
       id: 'trending_movies',
       type: 'movie',
       name: `🔥 Haftalık Trend Filmler`,
@@ -203,9 +216,12 @@ function getManifest(config) {
         { name: 'genre', isRequired: false, options: PURE_MOVIE_GENRES },
         { name: 'skip', isRequired: false }
       ]
-    },
-    // 2. Haftalık Trend Diziler
-    {
+    });
+  }
+
+  // 2. Default Template: Haftalık Trend Diziler (if enabled)
+  if (config.enableTrendingSeries !== false) {
+    catalogs.push({
       id: 'trending_series',
       type: 'series',
       name: `📺 Haftalık Trend Diziler`,
@@ -214,76 +230,48 @@ function getManifest(config) {
         { name: 'genre', isRequired: false, options: PURE_SERIES_GENRES },
         { name: 'skip', isRequired: false }
       ]
-    },
-    // 3. Oscar Ödüllü & Aday Filmler (~96)
-    {
-      id: 'oscar_collection',
-      type: 'movie',
-      name: `✨ Oscar Ödüllü & Aday Filmler`,
-      extra: [{ name: 'genre', isRequired: false, options: PURE_MOVIE_GENRES }, { name: 'skip', isRequired: false }]
-    },
-    // 4. IMDb & Letterboxd Top 250 (~98)
-    {
-      id: 'top250_collection',
-      type: 'movie',
-      name: `🏆 IMDb & Letterboxd Top 250`,
-      extra: [{ name: 'genre', isRequired: false, options: PURE_MOVIE_GENRES }, { name: 'skip', isRequired: false }]
-    },
-    // 5. Tüm Zamanların En İyi 100 TV Dizisi (~88)
-    {
-      id: 'rolling_stone_series',
-      type: 'series',
-      name: `🎸 Tüm Zamanların En İyi 100 TV Dizisi`,
-      extra: [{ name: 'genre', isRequired: false, options: PURE_SERIES_GENRES }, { name: 'skip', isRequired: false }]
-    },
-    // 6. Popüler Kore Dizileri (K-Drama) (~97)
-    {
-      id: 'kdrama_series',
-      type: 'series',
-      name: `🌸 Popüler Kore Dizileri (K-Drama)`,
-      extra: [{ name: 'genre', isRequired: false, options: PURE_SERIES_GENRES }, { name: 'skip', isRequired: false }]
-    },
-    // 7. Türk Sineması Başyapıtları (~88, Authentic Masters)
-    {
-      id: 'turkish_movies',
-      type: 'movie',
-      name: `🇹🇷 Türk Sineması Başyapıtları`,
-      extra: [{ name: 'genre', isRequired: false, options: PURE_MOVIE_GENRES }, { name: 'skip', isRequired: false }]
-    },
-    // 8. Aksiyon Sineması Başyapıtları (~128 Shuffled)
-    {
-      id: 'action_movies',
-      type: 'movie',
-      name: `💥 Aksiyon Sineması Başyapıtları`,
-      extra: [{ name: 'genre', isRequired: false, options: PURE_MOVIE_GENRES }, { name: 'skip', isRequired: false }]
-    },
-    // 9. Efsane & Popüler Türk TV Dizileri (~65 Pure Free TV)
-    {
-      id: 'turkish_series',
-      type: 'series',
-      name: `🇹🇷 Efsane & Popüler Türk Dizileri`,
-      extra: [{ name: 'genre', isRequired: false, options: PURE_SERIES_GENRES }, { name: 'skip', isRequired: false }]
-    },
-    // Discover-only: Personal Letterboxd lists
-    {
+    });
+  }
+
+  // 3. User Defined Custom Lists
+  if (Array.isArray(config.customLists)) {
+    config.customLists.forEach((list, idx) => {
+      const type = list.type === 'series' ? 'series' : 'movie';
+      const genreOptions = type === 'series' ? PURE_SERIES_GENRES : PURE_MOVIE_GENRES;
+      catalogs.push({
+        id: `custom_${idx}`,
+        type: type,
+        name: list.name || `📋 Özel Liste ${idx + 1}`,
+        extra: [
+          { name: 'genre', isRequired: false, options: genreOptions },
+          { name: 'skip', isRequired: false }
+        ]
+      });
+    });
+  }
+
+  // 4. Optional Personal Letterboxd (if username provided)
+  if (config.letterboxdUser && config.letterboxdUser.trim() !== '') {
+    const user = config.letterboxdUser.trim();
+    catalogs.push({
       id: 'my_watchlist',
       type: 'movie',
       name: `📌 İzleme Listem (${user})`,
       extra: [{ name: 'genre', isRequired: false, options: PURE_MOVIE_GENRES }, { name: 'skip', isRequired: false }]
-    },
-    {
+    });
+    catalogs.push({
       id: 'my_diary',
       type: 'movie',
       name: `🍿 Son İzlediklerim (${user})`,
       extra: [{ name: 'genre', isRequired: false, options: PURE_MOVIE_GENRES }, { name: 'skip', isRequired: false }]
-    }
-  ];
+    });
+  }
 
   return {
-    id: 'community.cinepilot.suite',
-    name: 'CinePilot - Ultimate Cinema Suite',
-    version: '3.8.0',
-    description: 'Arama Motoru, 100+ Trendler, Bölüm Görselleri, K-Drama, Türk TV Dizileri, Aksiyon, YouTube 1080p ve 4K Fragmanlar.',
+    id: 'community.cinepilot.studio',
+    name: 'CinePilot — Custom Cinema Suite',
+    version: '5.0.0',
+    description: 'Modüler ve Kişiselleştirilebilir Stremio Katalog Oluşturucu, 100+ Trendler, Özel Letterboxd/Trakt Listeleri ve 4K Fragmanlar.',
     resources: ['catalog', 'meta', 'stream'],
     types: ['movie', 'series'],
     catalogs: catalogs,
@@ -292,21 +280,8 @@ function getManifest(config) {
 }
 
 // -------------------------------------------------------------
-// Helper Functions
+// TMDB & Scraper Helpers
 // -------------------------------------------------------------
-
-function getPosterUrl(imdbId, tmdbPosterPath, useRpdb = true, isTurkish = false) {
-  if (isTurkish && tmdbPosterPath) {
-    return `https://image.tmdb.org/t/p/w500${tmdbPosterPath}`;
-  }
-  if (useRpdb && imdbId && imdbId.startsWith('tt')) {
-    return `https://api.ratingposterdb.com/${RPDB_KEY}/imdb/poster-default/${imdbId}.jpg`;
-  }
-  if (tmdbPosterPath) {
-    return `https://image.tmdb.org/t/p/w500${tmdbPosterPath}`;
-  }
-  return 'https://images.metahub.space/poster/medium/no_poster.png';
-}
 
 async function fetchTmdbDetails(tmdbId, type = 'movie') {
   const cacheKey = `tmdb_${type}_${tmdbId}`;
@@ -404,10 +379,10 @@ async function searchTmdb(title, year = null, type = 'movie') {
   }
 }
 
-function scrapeLetterboxdPython(username, section) {
+function scrapeUniversalList(urlOrUser, mode = 'letterboxd') {
   return new Promise((resolve) => {
-    const scriptPath = path.join(__dirname, 'letterboxd.py');
-    const py = spawn('python3', [scriptPath, username, section]);
+    const scriptPath = path.join(__dirname, 'list_scraper.py');
+    const py = spawn('python3', [scriptPath, urlOrUser, mode]);
 
     let output = '';
     py.stdout.on('data', (d) => { output += d.toString(); });
@@ -423,54 +398,25 @@ function scrapeLetterboxdPython(username, section) {
   });
 }
 
-// Convert Letterboxd scraped films to Stremio Metas concurrently
-async function resolveLetterboxdFilms(films, useRpdb = true) {
-  const promises = films.map(async (f) => {
+// Convert Scraped Film List (title, year) to Stremio Metas concurrently
+async function resolveScrapedListToMetas(scrapedList, type = 'movie', rpdbKey = '') {
+  const endpointType = type === 'series' ? 'tv' : 'movie';
+
+  const promises = scrapedList.map(async (item) => {
     try {
-      const searched = await searchTmdb(f.title, f.year, 'movie');
+      const searched = await searchTmdb(item.title, item.year, endpointType);
       if (searched) {
-        const details = await fetchTmdbDetails(searched.id, 'movie');
+        const details = await fetchTmdbDetails(searched.id, endpointType);
         const imdbId = details?.external_ids?.imdb_id;
         const genres = extractGenres(details);
         return {
           id: imdbId || `tmdb:${searched.id}`,
-          type: 'movie',
-          name: f.title,
-          poster: getPosterUrl(imdbId, searched.poster_path, useRpdb),
+          type: type,
+          name: item.title,
+          poster: getPosterUrl(imdbId, searched.poster_path, rpdbKey),
           description: searched.overview,
           genres: genres,
-          releaseInfo: f.year || (searched.release_date ? searched.release_date.split('-')[0] : undefined)
-        };
-      }
-    } catch (e) {}
-    return null;
-  });
-
-  const results = await Promise.all(promises);
-  return results.filter(Boolean);
-}
-
-// Convert IMDb / TMDB ID List to Metas concurrently
-async function resolveImdbList(imdbIds, type = 'movie', useRpdb = true, isTurkish = false) {
-  const promises = imdbIds.map(async (imdbId) => {
-    try {
-      let found = null;
-      if (imdbId.startsWith('tmdb:')) {
-        const tmdbId = imdbId.split(':')[1];
-        found = await fetchTmdbDetails(tmdbId, type === 'series' ? 'tv' : 'movie');
-      } else {
-        found = await findTmdbByImdb(imdbId);
-      }
-      if (found) {
-        const genres = extractGenres(found);
-        return {
-          id: imdbId,
-          type: type,
-          name: found.title || found.name,
-          poster: getPosterUrl(imdbId, found.poster_path, useRpdb, isTurkish),
-          description: found.overview,
-          genres: genres,
-          releaseInfo: (found.release_date || found.first_air_date || '').split('-')[0]
+          releaseInfo: item.year || (searched.release_date || searched.first_air_date || '').split('-')[0]
         };
       }
     } catch (e) {}
@@ -482,11 +428,11 @@ async function resolveImdbList(imdbIds, type = 'movie', useRpdb = true, isTurkis
 }
 
 // Multi-page TMDB Weekly Trending Fetcher (100+ items with Genre Support)
-async function fetchTrending100(type = 'movie', useRpdb = true, genreName = null) {
+async function fetchTrending100(type = 'movie', rpdbKey = '', genreName = null) {
   const endpointType = type === 'series' ? 'tv' : 'movie';
   const genreId = genreName && genreName !== 'Tümü' ? TMDB_GENRE_MAP[genreName] : null;
 
-  const cacheKey = `trending_100_${type}_${genreName || 'all'}_${useRpdb}`;
+  const cacheKey = `trending_100_${type}_${genreName || 'all'}_${rpdbKey || 'no_rpdb'}`;
   const cached = getCache(cacheKey);
   if (cached) return cached;
 
@@ -517,7 +463,7 @@ async function fetchTrending100(type = 'movie', useRpdb = true, genreName = null
         id: imdbId || `tmdb:${item.id}`,
         type: type,
         name: item.title || item.name,
-        poster: getPosterUrl(imdbId, item.poster_path, useRpdb),
+        poster: getPosterUrl(imdbId, item.poster_path, rpdbKey),
         description: item.overview,
         genres: extractGenres(details),
         releaseInfo: (item.release_date || item.first_air_date || '').split('-')[0]
@@ -533,7 +479,7 @@ async function fetchTrending100(type = 'movie', useRpdb = true, genreName = null
 }
 
 // Search TMDB directly for User Search Queries
-async function searchTmdbCatalog(query, type = 'movie', useRpdb = true) {
+async function searchTmdbCatalog(query, type = 'movie', rpdbKey = '') {
   const endpointType = type === 'series' ? 'tv' : 'movie';
   try {
     const url = `https://api.themoviedb.org/3/search/${endpointType}?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&language=tr-TR`;
@@ -546,7 +492,7 @@ async function searchTmdbCatalog(query, type = 'movie', useRpdb = true) {
         id: imdbId || `tmdb:${item.id}`,
         type: type,
         name: item.title || item.name,
-        poster: getPosterUrl(imdbId, item.poster_path, useRpdb),
+        poster: getPosterUrl(imdbId, item.poster_path, rpdbKey),
         description: item.overview,
         genres: extractGenres(details),
         releaseInfo: (item.release_date || item.first_air_date || '').split('-')[0]
@@ -558,52 +504,12 @@ async function searchTmdbCatalog(query, type = 'movie', useRpdb = true) {
   }
 }
 
-// Verified YouTube Search via Native HTTPS + Consent Cookies
-function searchVerifiedYouTube(query) {
-  const cacheKey = `yt_verified_https_${query}`;
-  const cached = getCache(cacheKey);
-  if (cached) return Promise.resolve(cached);
-
-  return new Promise((resolve) => {
-    const url = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(query);
-    const req = https.get(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-        'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7',
-        'Cookie': 'CONSENT=YES+cb.20210328-17-p0.en+FX+417; SOCS=CAESEwgDEgk2MzQ0MzY0NjAaAmVuIAEaBgiAo_OtBg'
-      }
-    }, (res) => {
-      let data = '';
-      res.on('data', chunk => { data += chunk; });
-      res.on('end', () => {
-        const matches = data.match(/\"videoId\":\"([a-zA-Z0-9_-]{11})\"/g);
-        if (matches) {
-          const ids = matches.map(m => m.match(/\"videoId\":\"([a-zA-Z0-9_-]{11})\"/)[1]);
-          const unique = [...new Set(ids)];
-          if (unique.length > 0) {
-            setCache(cacheKey, unique[0], 24 * 60 * 60 * 1000);
-            return resolve(unique[0]);
-          }
-        }
-        resolve(null);
-      });
-    });
-    req.on('error', () => resolve(null));
-    req.setTimeout(6000, () => { req.destroy(); resolve(null); });
-  });
-}
-
 // -------------------------------------------------------------
 // Routes
 // -------------------------------------------------------------
 
 app.get(['/', '/configure'], (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-// Direct Watch Redirect (Allows IINA / Browser 1-click open)
-app.get('/watch/:ytId', (req, res) => {
-  res.redirect(`https://www.youtube.com/watch?v=${req.params.ytId}`);
 });
 
 app.get(['/manifest.json', '/:config/manifest.json'], (req, res) => {
@@ -639,111 +545,58 @@ app.get([
   try {
     // 0. GLOBAL SEARCH BAR HANDLER
     if (searchQuery) {
-      metas = await searchTmdbCatalog(searchQuery, type, config.useRpdb);
+      metas = await searchTmdbCatalog(searchQuery, type, config.rpdbKey);
       return res.json({ metas });
     }
 
     // 1. HAFTALIK TREND FİLMLER (100+ with Genre Support)
     if (id === 'trending_movies') {
-      metas = await fetchTrending100('movie', config.useRpdb, selectedGenre);
+      metas = await fetchTrending100('movie', config.rpdbKey, selectedGenre);
       return res.json({ metas });
     }
 
     // 2. HAFTALIK TREND DİZİLER (100+ with Genre Support)
     else if (id === 'trending_series') {
-      metas = await fetchTrending100('series', config.useRpdb, selectedGenre);
+      metas = await fetchTrending100('series', config.rpdbKey, selectedGenre);
       return res.json({ metas });
     }
 
-    // 3. OSCAR ÖDÜLLÜ & ADAY FİLMLER (~96)
-    else if (id === 'oscar_collection') {
-      const cacheKey = `full_oscar_v8_${config.useRpdb}`;
-      metas = getCache(cacheKey);
-      if (!metas) {
-        metas = await resolveImdbList(curatedData.oscar, 'movie', config.useRpdb);
-        setCache(cacheKey, metas, 24 * 60 * 60 * 1000);
+    // 3. USER DEFINED CUSTOM LISTS (e.g. custom_0, custom_1)
+    else if (id.startsWith('custom_')) {
+      const idx = parseInt(id.split('_')[1], 10);
+      const customList = config.customLists && config.customLists[idx];
+
+      if (customList && customList.url) {
+        const cacheKey = `custom_list_${idx}_${encodeURIComponent(customList.url)}_${config.rpdbKey || 'no_rpdb'}`;
+        metas = getCache(cacheKey);
+
+        if (!metas) {
+          const scraped = await scrapeUniversalList(customList.url);
+          metas = await resolveScrapedListToMetas(scraped, customList.type || type, config.rpdbKey);
+          setCache(cacheKey, metas, 2 * 60 * 60 * 1000); // 2 hours cache
+        }
       }
     }
 
-    // 4. TOP 250 MOVIES (~98)
-    else if (id === 'top250_collection') {
-      const cacheKey = `full_top250_v8_${config.useRpdb}`;
+    // 4. WATCHLIST (Letterboxd)
+    else if (id === 'my_watchlist' && config.letterboxdUser) {
+      const cacheKey = `user_wl_${config.letterboxdUser}_${config.rpdbKey || 'no_rpdb'}`;
       metas = getCache(cacheKey);
       if (!metas) {
-        metas = await resolveImdbList(curatedData.top250, 'movie', config.useRpdb);
-        setCache(cacheKey, metas, 24 * 60 * 60 * 1000);
+        const scraped = await scrapeUniversalList(`https://letterboxd.com/${config.letterboxdUser}/watchlist/`);
+        metas = await resolveScrapedListToMetas(scraped, 'movie', config.rpdbKey);
+        setCache(cacheKey, metas, 30 * 60 * 1000);
       }
     }
 
-    // 5. ROLLING STONE TOP 100 TV SERIES (~88)
-    else if (id === 'rolling_stone_series') {
-      const cacheKey = `full_series100_v8_${config.useRpdb}`;
+    // 5. DIARY (Letterboxd)
+    else if (id === 'my_diary' && config.letterboxdUser) {
+      const cacheKey = `user_diary_${config.letterboxdUser}_${config.rpdbKey || 'no_rpdb'}`;
       metas = getCache(cacheKey);
       if (!metas) {
-        metas = await resolveImdbList(curatedData.series100, 'series', config.useRpdb);
-        setCache(cacheKey, metas, 24 * 60 * 60 * 1000);
-      }
-    }
-
-    // 6. POPÜLER KORE DİZİLERİ (K-DRAMA) (~97)
-    else if (id === 'kdrama_series') {
-      const cacheKey = `full_kdrama_v8_${config.useRpdb}`;
-      metas = getCache(cacheKey);
-      if (!metas) {
-        metas = await resolveImdbList(curatedData.kdrama, 'series', config.useRpdb);
-        setCache(cacheKey, metas, 24 * 60 * 60 * 1000);
-      }
-    }
-
-    // 7. TÜRK SİNEMASI BAŞYAPITLARI (~88, Authentic)
-    else if (id === 'turkish_movies') {
-      const cacheKey = `full_turkish_movies_v8`;
-      metas = getCache(cacheKey);
-      if (!metas) {
-        metas = await resolveImdbList(curatedData.turkish_movies, 'movie', config.useRpdb, true);
-        setCache(cacheKey, metas, 24 * 60 * 60 * 1000);
-      }
-    }
-
-    // 8. AKSİYON SİNEMASI BAŞYAPITLARI (~128 Shuffled)
-    else if (id === 'action_movies') {
-      const cacheKey = `full_action_movies_v8_${config.useRpdb}`;
-      metas = getCache(cacheKey);
-      if (!metas) {
-        metas = await resolveImdbList(curatedData.action_movies, 'movie', config.useRpdb);
-        setCache(cacheKey, metas, 24 * 60 * 60 * 1000);
-      }
-    }
-
-    // 9. EFSANE & POPÜLER TÜRK DİZİLERİ (~65 Pure Free TV)
-    else if (id === 'turkish_series') {
-      const cacheKey = `full_turkish_series_v8`;
-      metas = getCache(cacheKey);
-      if (!metas) {
-        metas = await resolveImdbList(curatedData.turkish_series, 'series', config.useRpdb, true);
-        setCache(cacheKey, metas, 24 * 60 * 60 * 1000);
-      }
-    }
-
-    // 10. WATCHLIST (Full Letterboxd)
-    else if (id === 'my_watchlist') {
-      const cacheKey = `full_wl_v8_${config.letterboxdUser}_${config.useRpdb}`;
-      metas = getCache(cacheKey);
-      if (!metas) {
-        const raw = await scrapeLetterboxdPython(config.letterboxdUser, 'watchlist');
-        metas = await resolveLetterboxdFilms(raw, config.useRpdb);
-        setCache(cacheKey, metas, 20 * 60 * 1000);
-      }
-    }
-
-    // 11. DIARY / RECENT (Full Letterboxd)
-    else if (id === 'my_diary') {
-      const cacheKey = `full_diary_v8_${config.letterboxdUser}_${config.useRpdb}`;
-      metas = getCache(cacheKey);
-      if (!metas) {
-        const raw = await scrapeLetterboxdPython(config.letterboxdUser, 'films');
-        metas = await resolveLetterboxdFilms(raw, config.useRpdb);
-        setCache(cacheKey, metas, 20 * 60 * 1000);
+        const scraped = await scrapeUniversalList(`https://letterboxd.com/${config.letterboxdUser}/films/`);
+        metas = await resolveScrapedListToMetas(scraped, 'movie', config.rpdbKey);
+        setCache(cacheKey, metas, 30 * 60 * 1000);
       }
     }
 
@@ -787,8 +640,7 @@ app.get(['/meta/:type/:id.json', '/:config/meta/:type/:id.json'], async (req, re
 
     const title = tmdbData.title || tmdbData.name;
     const releaseYear = (tmdbData.release_date || tmdbData.first_air_date || '').split('-')[0];
-    const isTurkish = tmdbData.original_language === 'tr' || tmdbData.origin_country?.includes('TR');
-    const poster = getPosterUrl(imdbId, tmdbData.poster_path, config.useRpdb, isTurkish);
+    const poster = getPosterUrl(imdbId, tmdbData.poster_path, config.rpdbKey);
     const background = tmdbData.backdrop_path ? `https://image.tmdb.org/t/p/original${tmdbData.backdrop_path}` : undefined;
 
     const genres = extractGenres(tmdbData);
@@ -863,7 +715,7 @@ app.get(['/meta/:type/:id.json', '/:config/meta/:type/:id.json'], async (req, re
   }
 });
 
-// Stream Endpoint: Full Episodes, Full Movies & Official Trailers!
+// Stream Endpoint: Official 4K / HD Trailers Only (No full episode YouTube streams)
 app.get(['/stream/:type/:id.json', '/:config/stream/:type/:id.json'], async (req, res) => {
   const config = parseConfig(req.params.config);
   const type = req.params.type;
@@ -872,126 +724,19 @@ app.get(['/stream/:type/:id.json', '/:config/stream/:type/:id.json'], async (req
   try {
     const streams = [];
 
-    // 1. Series Episode Stream Handling
-    let isSeriesEp = false;
-    let showTitle = null;
-    let season = '1';
-    let episode = '1';
-    let tmdbData = null;
-    let tmdbIdNum = null;
-
-    if (type === 'series') {
-      const parts = rawId.split(':');
-      if (rawId.startsWith('tmdb:') && parts.length >= 4) {
-        isSeriesEp = true;
-        tmdbIdNum = parts[1];
-        season = parts[2];
-        episode = parts[3];
-        tmdbData = await fetchTmdbDetails(tmdbIdNum, 'tv');
-        showTitle = tmdbData?.name;
-      } else if (rawId.startsWith('tt') && parts.length >= 3) {
-        isSeriesEp = true;
-        const imdbId = parts[0];
-        season = parts[1];
-        episode = parts[2];
-        const found = await findTmdbByImdb(imdbId);
-        if (found) {
-          tmdbIdNum = found.id;
-          tmdbData = await fetchTmdbDetails(found.id, 'tv');
-          showTitle = tmdbData?.name;
-        }
-      }
-    }
-
-    if (isSeriesEp && showTitle) {
-      const epQueries = [
-        `${showTitle} ${episode}. Bölüm`,
-        `${showTitle} ${season}. Sezon ${episode}. Bölüm`,
-        `${showTitle} ${episode}. Bölüm Tek Parça`
-      ];
-
-      let epVid = null;
-      for (const q of epQueries) {
-        epVid = await searchVerifiedYouTube(q);
-        if (epVid) break;
-      }
-
-      if (epVid) {
-        // Native YouTube stream
-        streams.push({
-          name: "▶️ YouTube Full HD",
-          title: `📺 ${showTitle} - S${season}E${episode}\nResmi YouTube Oynatıcısı (1080p)`,
-          ytId: epVid
-        });
-
-        // Direct HTTP External URL (Copies directly into IINA / Browser with 100% valid URL!)
-        streams.push({
-          name: "🌐 IINA / Harici Bağlantı",
-          title: `📺 ${showTitle} - S${season}E${episode}\nIINA ve Tarayıcı İçin Geçerli URL`,
-          externalUrl: `https://www.youtube.com/watch?v=${epVid}`
-        });
-      }
-    }
-
-    // 2. Movie Handling: YouTube Full Movie Fallback for Turkish / Classic Films
-    if (type === 'movie') {
-      let movieTitle = null;
-      if (rawId.startsWith('tt')) {
-        const found = await findTmdbByImdb(rawId);
-        movieTitle = found?.title;
-        if (found) {
-          tmdbIdNum = found.id;
-          tmdbData = await fetchTmdbDetails(found.id, 'movie');
-        }
-      } else if (rawId.startsWith('tmdb:')) {
-        tmdbIdNum = rawId.split(':')[1];
-        tmdbData = await fetchTmdbDetails(tmdbIdNum, 'movie');
-        movieTitle = tmdbData?.title;
-      }
-
-      if (movieTitle) {
-        const isTurkish = tmdbData?.original_language === 'tr' || tmdbData?.origin_country?.includes('TR');
-        if (isTurkish) {
-          const fullMovieQueries = [
-            `${movieTitle} Full HD Tek Parça`,
-            `${movieTitle} Full Film İzle`,
-            `${movieTitle} Tek Parça`
-          ];
-          for (const q of fullMovieQueries) {
-            const vid = await searchVerifiedYouTube(q);
-            if (vid) {
-              streams.push({
-                name: "▶️ YouTube Full Film",
-                title: `🍿 ${movieTitle} (1080p Full Film)\nResmi YouTube Yayını`,
-                ytId: vid
-              });
-              streams.push({
-                name: "🌐 IINA / Harici Film",
-                title: `🍿 ${movieTitle} (Full Film)\nIINA ve Tarayıcı Doğrudan Link`,
-                externalUrl: `https://www.youtube.com/watch?v=${vid}`
-              });
-              break;
-            }
-          }
-        }
-      }
-    }
-
-    // 3. Official 4K / HD Trailers for ALL Movies & Series
-    if (config.enableTrailers) {
-      let targetTmdbId = tmdbIdNum;
+    // Official 4K / HD Trailers
+    if (config.enableTrailers !== false) {
+      let targetTmdbId = null;
       let targetType = type === 'series' ? 'tv' : 'movie';
 
-      if (!targetTmdbId) {
-        if (rawId.startsWith('tt')) {
-          const imdbId = rawId.split(':')[0];
-          const found = await findTmdbByImdb(imdbId);
-          targetTmdbId = found?.id;
-          if (found?.title) targetType = 'movie';
-          else if (found?.name) targetType = 'tv';
-        } else if (rawId.startsWith('tmdb:')) {
-          targetTmdbId = rawId.split(':')[1];
-        }
+      if (rawId.startsWith('tt')) {
+        const imdbId = rawId.split(':')[0];
+        const found = await findTmdbByImdb(imdbId);
+        targetTmdbId = found?.id;
+        if (found?.title) targetType = 'movie';
+        else if (found?.name) targetType = 'tv';
+      } else if (rawId.startsWith('tmdb:')) {
+        targetTmdbId = rawId.split(':')[1];
       }
 
       if (targetTmdbId) {
@@ -1016,7 +761,7 @@ app.get(['/stream/:type/:id.json', '/:config/stream/:type/:id.json'], async (req
 
 app.listen(PORT, '0.0.0.0', () => {
   const ip = getLocalIp();
-  console.log(`🚀 CinePilot v3.8.0 Server running on http://127.0.0.1:${PORT}`);
-  console.log(`📡 Local Network URL (For Samsung TV & AndroidTV): http://${ip}:${PORT}`);
+  console.log(`🚀 CinePilot v5.0.0 [Community Studio] running on http://127.0.0.1:${PORT}`);
+  console.log(`📡 Local Network URL: http://${ip}:${PORT}`);
   console.log(`⚙️ Web Configurator: http://127.0.0.1:${PORT}/configure`);
 });
