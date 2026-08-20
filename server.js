@@ -312,35 +312,123 @@ function getPosterUrl(imdbId, tmdbPosterPath, rpdbKey = '') {
 }
 
 // -------------------------------------------------------------
-// Pure Node.js Multi-Page Letterboxd Scraper (Powered by got-scraping)
+// Pure Node.js Parallel Letterboxd Scraper (Powered by got-scraping)
 // -------------------------------------------------------------
 
-async function scrapeLetterboxdNode(targetUrl, maxPages = 20) {
+async function scrapeLetterboxdParallel(targetUrl) {
   const { gotScraping } = await import('got-scraping');
-  const allFilms = [];
-  const seen = new Set();
   const cleanUrl = targetUrl.replace(/\/+$/, '');
+  const seen = new Set();
+  const allFilms = [];
 
-  for (let page = 1; page <= maxPages; page++) {
-    const pageUrl = page === 1 ? cleanUrl + '/' : cleanUrl + '/page/' + page + '/';
-    let res = null;
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        res = await gotScraping(pageUrl);
-        if (res.statusCode === 200) break;
-      } catch (e) {
-        await new Promise(r => setTimeout(r, 400));
+  // 1. Check if user diary (/films) or watchlist (/watchlist)
+  const userFilmsMatch = cleanUrl.match(/letterboxd\.com\/([^\/]+)\/films/);
+  const userWlMatch = cleanUrl.match(/letterboxd\.com\/([^\/]+)\/watchlist/);
+
+  if (userFilmsMatch) {
+    const username = userFilmsMatch[1];
+    let totalPages = 4;
+    try {
+      const profileRes = await gotScraping(`https://letterboxd.com/${username}/`);
+      const match = profileRes.body.match(/href=\"\/[^\/]+\/films\/\"[^>]*>\s*<span class=\"value\">(\d+)<\/span>/);
+      if (match) {
+        totalPages = Math.max(1, Math.ceil(parseInt(match[1], 10) / 72));
+      }
+    } catch (e) {}
+
+    const pagePromises = Array.from({ length: totalPages }, (_, i) => i + 1).map(async (p) => {
+      const u = p === 1 ? `https://letterboxd.com/${username}/films/` : `https://letterboxd.com/${username}/films/page/${p}/`;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const res = await gotScraping(u);
+          if (res.statusCode === 200) {
+            return [...res.body.matchAll(/data-item-name=\"([^\"]+)\"/g)].map(x => x[1]);
+          }
+        } catch (e) {
+          await new Promise(r => setTimeout(r, 400));
+        }
+      }
+      return [];
+    });
+
+    const pages = await Promise.all(pagePromises);
+    for (const raw of pages.flat()) {
+      if (!seen.has(raw)) {
+        seen.add(raw);
+        const ym = raw.match(/\((\d{4})\)$/);
+        const year = ym ? ym[1] : null;
+        const title = decodeHtmlEntities(raw.replace(/\s*\(\d{4}\)$/, '').trim());
+        if (title) allFilms.push({ title, year });
       }
     }
+    return allFilms;
+  }
 
-    if (!res || res.statusCode !== 200) break;
+  if (userWlMatch) {
+    const username = userWlMatch[1];
+    let totalPages = 4;
+    try {
+      const profileRes = await gotScraping(`https://letterboxd.com/${username}/`);
+      const match = profileRes.body.match(/href=\"\/[^\/]+\/watchlist\/\"[^>]*class=\"all-link\">(\d+)<\/a>/);
+      if (match) {
+        totalPages = Math.max(1, Math.ceil(parseInt(match[1], 10) / 28));
+      }
+    } catch (e) {}
 
-    const matches = [...res.body.matchAll(/data-item-name=\"([^\"]+)\"/g)].map(x => x[1]);
-    if (matches.length === 0) {
-      const altMatches = [...res.body.matchAll(/class=\"[^\"]*film-poster[^\"]*\"[^>]*alt=\"([^\"]+)\"/g)].map(x => x[1]);
-      if (altMatches.length > 0) {
-        for (const raw of altMatches) {
-          if (seen.has(raw)) continue;
+    const pagePromises = Array.from({ length: totalPages }, (_, i) => i + 1).map(async (p) => {
+      const u = p === 1 ? `https://letterboxd.com/${username}/watchlist/` : `https://letterboxd.com/${username}/watchlist/page/${p}/`;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const res = await gotScraping(u);
+          if (res.statusCode === 200) {
+            return [...res.body.matchAll(/data-item-name=\"([^\"]+)\"/g)].map(x => x[1]);
+          }
+        } catch (e) {
+          await new Promise(r => setTimeout(r, 400));
+        }
+      }
+      return [];
+    });
+
+    const pages = await Promise.all(pagePromises);
+    for (const raw of pages.flat()) {
+      if (!seen.has(raw)) {
+        seen.add(raw);
+        const ym = raw.match(/\((\d{4})\)$/);
+        const year = ym ? ym[1] : null;
+        const title = decodeHtmlEntities(raw.replace(/\s*\(\d{4}\)$/, '').trim());
+        if (title) allFilms.push({ title, year });
+      }
+    }
+    return allFilms;
+  }
+
+  // 2. Generic Public Custom List
+  try {
+    const res1 = await gotScraping(cleanUrl + '/');
+    if (res1.statusCode === 200) {
+      const pageMatches = [...res1.body.matchAll(/class=\"paginate-page\"[^>]*><a[^>]*>(\d+)<\/a>/g)].map(x => parseInt(x[1], 10));
+      const totalPages = pageMatches.length > 0 ? Math.min(Math.max(...pageMatches), 15) : 1;
+
+      const pagePromises = Array.from({ length: totalPages }, (_, i) => i + 1).map(async (p) => {
+        if (p === 1) return [...res1.body.matchAll(/data-item-name=\"([^\"]+)\"/g)].map(x => x[1]);
+        const pageUrl = `${cleanUrl}/page/${p}/`;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            const res = await gotScraping(pageUrl);
+            if (res.statusCode === 200) {
+              return [...res.body.matchAll(/data-item-name=\"([^\"]+)\"/g)].map(x => x[1]);
+            }
+          } catch (e) {
+            await new Promise(r => setTimeout(r, 400));
+          }
+        }
+        return [];
+      });
+
+      const pages = await Promise.all(pagePromises);
+      for (const raw of pages.flat()) {
+        if (!seen.has(raw)) {
           seen.add(raw);
           const ym = raw.match(/\((\d{4})\)$/);
           const year = ym ? ym[1] : null;
@@ -348,18 +436,8 @@ async function scrapeLetterboxdNode(targetUrl, maxPages = 20) {
           if (title) allFilms.push({ title, year });
         }
       }
-      break;
     }
-
-    for (const raw of matches) {
-      if (seen.has(raw)) continue;
-      seen.add(raw);
-      const ym = raw.match(/\((\d{4})\)$/);
-      const year = ym ? ym[1] : null;
-      const title = decodeHtmlEntities(raw.replace(/\s*\(\d{4}\)$/, '').trim());
-      if (title) allFilms.push({ title, year });
-    }
-  }
+  } catch (e) {}
 
   return allFilms;
 }
@@ -402,14 +480,14 @@ async function scrapeUniversalList(urlOrUser, langLocale = 'tr-TR') {
     return [];
   }
 
-  // 2. Primary Scraper: Pure Node.js with got-scraping (Bypasses Cloudflare on all pages)
+  // 2. Primary Scraper: Pure Node.js Parallel got-scraping
   let targetUrl = target;
   if (!target.startsWith('http')) {
     targetUrl = `https://letterboxd.com/${target}/watchlist/`;
   }
 
   try {
-    const results = await scrapeLetterboxdNode(targetUrl, 20);
+    const results = await scrapeLetterboxdParallel(targetUrl);
     if (results && results.length > 0) {
       return results;
     }
@@ -518,7 +596,7 @@ function getManifest(config) {
   return {
     id: 'community.cinepilot.studio',
     name: 'CinePilot Studio',
-    version: '6.1.0',
+    version: '6.2.0',
     description: t.desc,
     resources: ['catalog', 'meta', 'stream'],
     types: ['movie', 'series'],
@@ -916,7 +994,7 @@ app.get([
 
     // 3. OSCAR ÖDÜLLÜ FİLMLER (~96)
     else if (id === 'oscar_collection') {
-      const cacheKey = `full_oscar_v20_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
+      const cacheKey = `full_oscar_v40_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
       metas = getCache(cacheKey);
       if (!metas) {
         metas = await resolveImdbList(curatedData.oscar, 'movie', config.rpdbKey, langLocale);
@@ -926,7 +1004,7 @@ app.get([
 
     // 4. TOP 250 MOVIES (~98)
     else if (id === 'top250_collection') {
-      const cacheKey = `full_top250_v20_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
+      const cacheKey = `full_top250_v40_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
       metas = getCache(cacheKey);
       if (!metas) {
         metas = await resolveImdbList(curatedData.top250, 'movie', config.rpdbKey, langLocale);
@@ -940,7 +1018,7 @@ app.get([
       const customList = config.customLists && config.customLists[idx];
 
       if (customList && customList.url) {
-        const cacheKey = `custom_list_v20_${idx}_${encodeURIComponent(customList.url)}_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
+        const cacheKey = `custom_list_v40_${idx}_${encodeURIComponent(customList.url)}_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
         metas = getCache(cacheKey);
 
         if (!metas) {
@@ -953,7 +1031,7 @@ app.get([
 
     // 6. WATCHLIST (Letterboxd)
     else if (id === 'my_watchlist' && config.letterboxdUser) {
-      const cacheKey = `user_wl_v30_${config.letterboxdUser}_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
+      const cacheKey = `user_wl_v40_${config.letterboxdUser}_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
       metas = getCache(cacheKey);
       if (!metas) {
         const scraped = await scrapeUniversalList(`https://letterboxd.com/${config.letterboxdUser}/watchlist/`, langLocale);
@@ -964,7 +1042,7 @@ app.get([
 
     // 7. DIARY (Letterboxd)
     else if (id === 'my_diary' && config.letterboxdUser) {
-      const cacheKey = `user_diary_v30_${config.letterboxdUser}_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
+      const cacheKey = `user_diary_v40_${config.letterboxdUser}_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
       metas = getCache(cacheKey);
       if (!metas) {
         const scraped = await scrapeUniversalList(`https://letterboxd.com/${config.letterboxdUser}/films/`, langLocale);
@@ -1141,7 +1219,7 @@ app.get(['/stream/:type/:id.json', '/:config/stream/:type/:id.json'], async (req
 
 app.listen(PORT, '0.0.0.0', () => {
   const ip = getLocalIp();
-  console.log(`🚀 CinePilot Studio v6.0.0 [Pure Node.js High-Speed Engine] running on http://127.0.0.1:${PORT}`);
+  console.log(`🚀 CinePilot Studio v6.2.0 [Parallel Got-Scraper Engine] running on http://127.0.0.1:${PORT}`);
   console.log(`📡 Local Network URL: http://${ip}:${PORT}`);
   console.log(`⚙️ Web Configurator: http://127.0.0.1:${PORT}/configure`);
 });
