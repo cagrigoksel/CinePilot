@@ -518,7 +518,7 @@ function getManifest(config) {
   return {
     id: 'community.cinepilot.studio',
     name: 'CinePilot Studio',
-    version: '6.0.0',
+    version: '6.1.0',
     description: t.desc,
     resources: ['catalog', 'meta', 'stream'],
     types: ['movie', 'series'],
@@ -953,7 +953,7 @@ app.get([
 
     // 6. WATCHLIST (Letterboxd)
     else if (id === 'my_watchlist' && config.letterboxdUser) {
-      const cacheKey = `user_wl_v20_${config.letterboxdUser}_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
+      const cacheKey = `user_wl_v30_${config.letterboxdUser}_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
       metas = getCache(cacheKey);
       if (!metas) {
         const scraped = await scrapeUniversalList(`https://letterboxd.com/${config.letterboxdUser}/watchlist/`, langLocale);
@@ -964,7 +964,7 @@ app.get([
 
     // 7. DIARY (Letterboxd)
     else if (id === 'my_diary' && config.letterboxdUser) {
-      const cacheKey = `user_diary_v20_${config.letterboxdUser}_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
+      const cacheKey = `user_diary_v30_${config.letterboxdUser}_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
       metas = getCache(cacheKey);
       if (!metas) {
         const scraped = await scrapeUniversalList(`https://letterboxd.com/${config.letterboxdUser}/films/`, langLocale);
