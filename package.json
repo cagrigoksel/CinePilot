@@ -1,10 +1,11 @@
 {
   "name": "cinepilot",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "CinePilot Studio Stremio Addon",
+  "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node server.js",
+    "postinstall": "pip3 install --break-system-packages cloudscraper beautifulsoup4 requests || pip install cloudscraper beautifulsoup4 requests || true"
   },
   "keywords": [],
   "type": "commonjs",

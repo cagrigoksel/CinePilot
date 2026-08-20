@@ -3,12 +3,29 @@ const path = require('path');
 const os = require('os');
 const fs = require('fs');
 const https = require('https');
-const { spawn } = require('child_process');
+const { spawn, execSync } = require('child_process');
 
 const app = express();
 const PORT = process.env.PORT || 7050;
 
 const TMDB_API_KEY = process.env.TMDB_API_KEY || 'caad8d4dace6ad77f0e22f5b746d5a20';
+
+// Ensure Python dependencies (cloudscraper) exist on server startup
+function ensurePythonDependencies() {
+  try {
+    execSync('python3 -c "import cloudscraper"', { stdio: 'ignore' });
+    console.log('🐍 Python cloudscraper engine is active and ready.');
+  } catch (e) {
+    console.log('📦 Installing python scraping dependencies (cloudscraper)...');
+    try {
+      execSync('python3 -m pip install --break-system-packages cloudscraper beautifulsoup4 requests || pip3 install --user cloudscraper beautifulsoup4 requests || pip install cloudscraper beautifulsoup4 requests', { stdio: 'inherit' });
+      console.log('✅ Python dependencies successfully installed!');
+    } catch (err) {
+      console.error('⚠️ Warning: Could not install python dependencies:', err.message);
+    }
+  }
+}
+ensurePythonDependencies();
 
 // Load Curated Lists
 const curatedData = JSON.parse(fs.readFileSync(path.join(__dirname, 'curated_lists.json'), 'utf8'));
@@ -314,7 +331,7 @@ function getPosterUrl(imdbId, tmdbPosterPath, rpdbKey = '') {
 
 // -------------------------------------------------------------
 // Universal Multi-Platform Scraper & List Resolver
-// Supports: Letterboxd (Multi-page up to 20 pages / 1500 films), TMDB (Lists & Collections)
+// Supports: Letterboxd (Multi-page period engine), TMDB (Lists & Collections)
 // -------------------------------------------------------------
 
 function runPythonScraper(target) {
@@ -323,17 +340,23 @@ function runPythonScraper(target) {
     const py = spawn('python3', [scriptPath, target], { timeout: 60000 });
 
     let output = '';
+    let errOutput = '';
     py.stdout.on('data', (d) => { output += d.toString(); });
-    py.stderr.on('data', () => {});
-    py.on('close', () => {
+    py.stderr.on('data', (d) => { errOutput += d.toString(); });
+    py.on('close', (code) => {
+      if (errOutput) console.log('Python scraper log:', errOutput.slice(0, 150));
       try {
         const json = JSON.parse(output.trim());
         resolve(Array.isArray(json) ? json : []);
       } catch (e) {
+        console.error('Python scraper parse error. Output was:', output.slice(0, 100));
         resolve([]);
       }
     });
-    py.on('error', () => { resolve([]); });
+    py.on('error', (err) => {
+      console.error('Python spawn error:', err.message);
+      resolve([]);
+    });
   });
 }
 
@@ -375,7 +398,7 @@ async function scrapeUniversalList(urlOrUser, langLocale = 'tr-TR') {
     return [];
   }
 
-  // 2. Primary Scraper: Python Cloudscraper (Multi-page up to 20 pages)
+  // 2. Primary Scraper: Python Cloudscraper (Period & Multi-page Engine)
   const pyResults = await runPythonScraper(target);
   if (pyResults && pyResults.length > 0) {
     return pyResults.map(p => ({
@@ -512,7 +535,7 @@ function getManifest(config) {
   return {
     id: 'community.cinepilot.studio',
     name: 'CinePilot Studio',
-    version: '5.8.0',
+    version: '5.9.0',
     description: t.desc,
     resources: ['catalog', 'meta', 'stream'],
     types: ['movie', 'series'],
@@ -910,7 +933,7 @@ app.get([
 
     // 3. OSCAR ÖDÜLLÜ FİLMLER (~96)
     else if (id === 'oscar_collection') {
-      const cacheKey = `full_oscar_v18_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
+      const cacheKey = `full_oscar_v19_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
       metas = getCache(cacheKey);
       if (!metas) {
         metas = await resolveImdbList(curatedData.oscar, 'movie', config.rpdbKey, langLocale);
@@ -920,7 +943,7 @@ app.get([
 
     // 4. TOP 250 MOVIES (~98)
     else if (id === 'top250_collection') {
-      const cacheKey = `full_top250_v18_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
+      const cacheKey = `full_top250_v19_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
       metas = getCache(cacheKey);
       if (!metas) {
         metas = await resolveImdbList(curatedData.top250, 'movie', config.rpdbKey, langLocale);
@@ -934,7 +957,7 @@ app.get([
       const customList = config.customLists && config.customLists[idx];
 
       if (customList && customList.url) {
-        const cacheKey = `custom_list_${idx}_${encodeURIComponent(customList.url)}_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
+        const cacheKey = `custom_list_v19_${idx}_${encodeURIComponent(customList.url)}_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
         metas = getCache(cacheKey);
 
         if (!metas) {
@@ -947,7 +970,7 @@ app.get([
 
     // 6. WATCHLIST (Letterboxd)
     else if (id === 'my_watchlist' && config.letterboxdUser) {
-      const cacheKey = `user_wl_v2_${config.letterboxdUser}_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
+      const cacheKey = `user_wl_v3_${config.letterboxdUser}_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
       metas = getCache(cacheKey);
       if (!metas) {
         const scraped = await scrapeUniversalList(`https://letterboxd.com/${config.letterboxdUser}/watchlist/`, langLocale);
@@ -958,7 +981,7 @@ app.get([
 
     // 7. DIARY (Letterboxd)
     else if (id === 'my_diary' && config.letterboxdUser) {
-      const cacheKey = `user_diary_v2_${config.letterboxdUser}_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
+      const cacheKey = `user_diary_v3_${config.letterboxdUser}_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
       metas = getCache(cacheKey);
       if (!metas) {
         const scraped = await scrapeUniversalList(`https://letterboxd.com/${config.letterboxdUser}/films/`, langLocale);
@@ -1135,7 +1158,7 @@ app.get(['/stream/:type/:id.json', '/:config/stream/:type/:id.json'], async (req
 
 app.listen(PORT, '0.0.0.0', () => {
   const ip = getLocalIp();
-  console.log(`🚀 CinePilot Studio v5.8.0 [Full Multi-Page & Zero Truncation] running on http://127.0.0.1:${PORT}`);
+  console.log(`🚀 CinePilot Studio v5.9.0 [Full Auto-Dependency Engine] running on http://127.0.0.1:${PORT}`);
   console.log(`📡 Local Network URL: http://${ip}:${PORT}`);
   console.log(`⚙️ Web Configurator: http://127.0.0.1:${PORT}/configure`);
 });
