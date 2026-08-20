@@ -53,6 +53,16 @@ function getLocalIp() {
   return '127.0.0.1';
 }
 
+function decodeHtmlEntities(str) {
+  if (!str) return '';
+  return str
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>');
+}
+
 function parseConfig(configStr) {
   const defaults = {
     lang: 'tr',
@@ -304,13 +314,13 @@ function getPosterUrl(imdbId, tmdbPosterPath, rpdbKey = '') {
 
 // -------------------------------------------------------------
 // Universal Multi-Platform Scraper & List Resolver
-// Supports: Letterboxd (Cloudflare bypass & Multi-page), TMDB (Lists & Collections)
+// Supports: Letterboxd (Multi-page 250+ films), TMDB (Lists & Collections)
 // -------------------------------------------------------------
 
 function runPythonScraper(target) {
   return new Promise((resolve) => {
     const scriptPath = path.join(__dirname, 'list_scraper.py');
-    const py = spawn('python3', [scriptPath, target], { timeout: 25000 });
+    const py = spawn('python3', [scriptPath, target], { timeout: 35000 });
 
     let output = '';
     py.stdout.on('data', (d) => { output += d.toString(); });
@@ -341,7 +351,7 @@ async function scrapeUniversalList(urlOrUser, langLocale = 'tr-TR') {
         const res = await fetch(`https://api.themoviedb.org/3/list/${listId}?api_key=${TMDB_API_KEY}&language=${langLocale}`).then(r => r.json());
         if (res.items && Array.isArray(res.items)) {
           return res.items.map(i => ({
-            title: i.title || i.name,
+            title: decodeHtmlEntities(i.title || i.name),
             year: (i.release_date || i.first_air_date || '').split('-')[0],
             tmdbId: i.id,
             type: i.media_type || (i.title ? 'movie' : 'series')
@@ -354,7 +364,7 @@ async function scrapeUniversalList(urlOrUser, langLocale = 'tr-TR') {
         const res = await fetch(`https://api.themoviedb.org/3/collection/${colId}?api_key=${TMDB_API_KEY}&language=${langLocale}`).then(r => r.json());
         if (res.parts && Array.isArray(res.parts)) {
           return res.parts.map(i => ({
-            title: i.title,
+            title: decodeHtmlEntities(i.title),
             year: (i.release_date || '').split('-')[0],
             tmdbId: i.id,
             type: 'movie'
@@ -368,7 +378,10 @@ async function scrapeUniversalList(urlOrUser, langLocale = 'tr-TR') {
   // 2. Primary Scraper: Python Cloudscraper (Multi-page Letterboxd bypass)
   const pyResults = await runPythonScraper(target);
   if (pyResults && pyResults.length > 0) {
-    return pyResults;
+    return pyResults.map(p => ({
+      ...p,
+      title: decodeHtmlEntities(p.title)
+    }));
   }
 
   // 3. Fallback Scraper: Native Node.js Fetch
@@ -392,7 +405,7 @@ async function scrapeUniversalList(urlOrUser, langLocale = 'tr-TR') {
       for (const raw of matches) {
         const yearMatch = raw.match(/\((\d{4})\)$/);
         const year = yearMatch ? yearMatch[1] : null;
-        const title = raw.replace(/\s*\(\d{4}\)$/, '').trim();
+        const title = decodeHtmlEntities(raw.replace(/\s*\(\d{4}\)$/, '').trim());
         if (title) allFilms.push({ title, year });
       }
     }
@@ -499,7 +512,7 @@ function getManifest(config) {
   return {
     id: 'community.cinepilot.studio',
     name: 'CinePilot Studio',
-    version: '5.6.0',
+    version: '5.7.0',
     description: t.desc,
     resources: ['catalog', 'meta', 'stream'],
     types: ['movie', 'series'],
@@ -509,7 +522,7 @@ function getManifest(config) {
 }
 
 // -------------------------------------------------------------
-// TMDB & Resolver Helpers (Multi-Language Supported)
+// TMDB & Smart Search Helpers (Multi-Language Supported)
 // -------------------------------------------------------------
 
 async function fetchTmdbDetails(tmdbId, type = 'movie', langLocale = 'tr-TR') {
@@ -589,42 +602,67 @@ async function findTmdbByImdb(imdbId, langLocale = 'tr-TR') {
   }
 }
 
-async function searchTmdb(title, year = null, type = 'movie', langLocale = 'tr-TR') {
-  const cacheKey = `search_${type}_${title}_${year || ''}_${langLocale}`;
+// Smart TMDB Search with Multi-Search & Year Flexibility
+async function smartSearchTmdb(title, year = null, preferredType = 'movie', langLocale = 'tr-TR') {
+  const cleanTitle = decodeHtmlEntities(title).trim();
+  const cacheKey = `smart_search_${preferredType}_${cleanTitle}_${year || ''}_${langLocale}`;
   const cached = getCache(cacheKey);
   if (cached) return cached;
 
   try {
-    let url = `https://api.themoviedb.org/3/search/${type}?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(title)}&language=${langLocale}`;
-    if (year) url += `&year=${year}`;
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    const data = await res.json();
-    const result = data.results && data.results[0] ? data.results[0] : null;
-    if (result) setCache(cacheKey, result);
-    return result;
-  } catch (e) {
-    return null;
-  }
+    const endpoint = preferredType === 'series' ? 'tv' : 'movie';
+
+    // 1. Try search with preferred type and year
+    let url = `https://api.themoviedb.org/3/search/${endpoint}?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(cleanTitle)}&language=${langLocale}`;
+    if (year && endpoint === 'movie') url += `&year=${year}`;
+    if (year && endpoint === 'tv') url += `&first_air_date_year=${year}`;
+
+    let res = await fetch(url).then(r => r.json()).catch(() => ({}));
+    if (res.results && res.results.length > 0) {
+      const match = { ...res.results[0], detectedType: endpoint };
+      setCache(cacheKey, match);
+      return match;
+    }
+
+    // 2. Try search with preferred type WITHOUT year
+    url = `https://api.themoviedb.org/3/search/${endpoint}?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(cleanTitle)}&language=${langLocale}`;
+    res = await fetch(url).then(r => r.json()).catch(() => ({}));
+    if (res.results && res.results.length > 0) {
+      const match = { ...res.results[0], detectedType: endpoint };
+      setCache(cacheKey, match);
+      return match;
+    }
+
+    // 3. Multi-Search Fallback (Finds TV series in movie lists & vice-versa)
+    url = `https://api.themoviedb.org/3/search/multi?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(cleanTitle)}&language=${langLocale}`;
+    res = await fetch(url).then(r => r.json()).catch(() => ({}));
+    const multiMatch = res.results?.find(r => r.media_type === 'movie' || r.media_type === 'tv');
+    if (multiMatch) {
+      const match = { ...multiMatch, detectedType: multiMatch.media_type };
+      setCache(cacheKey, match);
+      return match;
+    }
+  } catch (e) {}
+
+  return null;
 }
 
-// Convert Scraped List to Metas concurrently
+// Convert Scraped List to Metas concurrently (Fast batching & 100% item resolution)
 async function resolveScrapedListToMetas(scrapedList, type = 'movie', rpdbKey = '', langLocale = 'tr-TR') {
-  const endpointType = type === 'series' ? 'tv' : 'movie';
-  const targetItems = scrapedList.slice(0, 150);
-
-  const promises = targetItems.map(async (item) => {
+  const promises = scrapedList.map(async (item) => {
     try {
       let details = null;
       let searchedId = item.tmdbId;
+      let actualType = item.type || type;
 
       if (searchedId) {
-        details = await fetchTmdbDetails(searchedId, endpointType, langLocale);
+        details = await fetchTmdbDetails(searchedId, actualType === 'series' ? 'tv' : 'movie', langLocale);
       } else {
-        const searched = await searchTmdb(item.title, item.year, endpointType, langLocale);
+        const searched = await smartSearchTmdb(item.title, item.year, type, langLocale);
         if (searched) {
           searchedId = searched.id;
-          details = await fetchTmdbDetails(searched.id, endpointType, langLocale);
+          actualType = searched.detectedType === 'tv' ? 'series' : 'movie';
+          details = await fetchTmdbDetails(searched.id, searched.detectedType, langLocale);
         }
       }
 
@@ -633,7 +671,7 @@ async function resolveScrapedListToMetas(scrapedList, type = 'movie', rpdbKey = 
         const genres = extractGenres(details);
         return {
           id: imdbId || `tmdb:${details.id}`,
-          type: type,
+          type: actualType,
           name: details.title || details.name || item.title,
           poster: getPosterUrl(imdbId, details.poster_path, rpdbKey),
           description: details.overview,
@@ -813,7 +851,7 @@ app.get(['/manifest.json', '/:config/manifest.json'], (req, res) => {
   res.json(getManifest(config));
 });
 
-// Catalog Handler (Supports multi-language & smart pagination)
+// Catalog Handler
 app.get([
   '/catalog/:type/:id.json',
   '/catalog/:type/:id/:extra.json',
@@ -864,7 +902,7 @@ app.get([
 
     // 3. OSCAR ÖDÜLLÜ FİLMLER (~96)
     else if (id === 'oscar_collection') {
-      const cacheKey = `full_oscar_v16_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
+      const cacheKey = `full_oscar_v17_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
       metas = getCache(cacheKey);
       if (!metas) {
         metas = await resolveImdbList(curatedData.oscar, 'movie', config.rpdbKey, langLocale);
@@ -874,7 +912,7 @@ app.get([
 
     // 4. TOP 250 MOVIES (~98)
     else if (id === 'top250_collection') {
-      const cacheKey = `full_top250_v16_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
+      const cacheKey = `full_top250_v17_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
       metas = getCache(cacheKey);
       if (!metas) {
         metas = await resolveImdbList(curatedData.top250, 'movie', config.rpdbKey, langLocale);
@@ -938,7 +976,7 @@ app.get([
   }
 });
 
-// Meta Endpoint (Multi-Language Supported)
+// Meta Endpoint
 app.get(['/meta/:type/:id.json', '/:config/meta/:type/:id.json'], async (req, res) => {
   const config = parseConfig(req.params.config);
   const langLocale = LANG_LOCALES[config.lang] || 'tr-TR';
@@ -1089,7 +1127,7 @@ app.get(['/stream/:type/:id.json', '/:config/stream/:type/:id.json'], async (req
 
 app.listen(PORT, '0.0.0.0', () => {
   const ip = getLocalIp();
-  console.log(`🚀 CinePilot Studio v5.6.0 [Global i18n Edition] running on http://127.0.0.1:${PORT}`);
+  console.log(`🚀 CinePilot Studio v5.7.0 [Smart Multi-Search Edition] running on http://127.0.0.1:${PORT}`);
   console.log(`📡 Local Network URL: http://${ip}:${PORT}`);
   console.log(`⚙️ Web Configurator: http://127.0.0.1:${PORT}/configure`);
 });
