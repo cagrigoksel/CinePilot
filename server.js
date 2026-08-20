@@ -3,6 +3,7 @@ const path = require('path');
 const os = require('os');
 const fs = require('fs');
 const https = require('https');
+const { spawn } = require('child_process');
 
 const app = express();
 const PORT = process.env.PORT || 7050;
@@ -207,10 +208,30 @@ function getPosterUrl(imdbId, tmdbPosterPath, rpdbKey = '') {
 
 // -------------------------------------------------------------
 // Universal Multi-Platform Scraper & List Resolver
-// Supports: Letterboxd, TMDB (Lists & Collections), Trakt
+// Supports: Letterboxd (Cloudflare bypass), TMDB (Lists & Collections), Trakt
 // -------------------------------------------------------------
 
-async function scrapeUniversalList(urlOrUser, maxPages = 5) {
+function runPythonScraper(target) {
+  return new Promise((resolve) => {
+    const scriptPath = path.join(__dirname, 'list_scraper.py');
+    const py = spawn('python3', [scriptPath, target], { timeout: 25000 });
+
+    let output = '';
+    py.stdout.on('data', (d) => { output += d.toString(); });
+    py.stderr.on('data', () => {});
+    py.on('close', () => {
+      try {
+        const json = JSON.parse(output.trim());
+        resolve(Array.isArray(json) ? json : []);
+      } catch (e) {
+        resolve([]);
+      }
+    });
+    py.on('error', () => { resolve([]); });
+  });
+}
+
+async function scrapeUniversalList(urlOrUser) {
   const target = urlOrUser.trim();
 
   // 1. TMDB Platform Resolution
@@ -248,61 +269,38 @@ async function scrapeUniversalList(urlOrUser, maxPages = 5) {
     return [];
   }
 
-  // 2. Letterboxd Platform Resolution (Native Node.js)
+  // 2. Primary Scraper: Python Cloudscraper (Full 250+ pagination & Cloudflare bypass)
+  const pyResults = await runPythonScraper(target);
+  if (pyResults && pyResults.length > 0) {
+    return pyResults;
+  }
+
+  // 3. Fallback Scraper: Native Node.js Fetch (Page 1 fallback)
   let baseTarget = target;
   if (!target.startsWith('http')) {
     baseTarget = `https://letterboxd.com/${target}/watchlist/`;
   }
 
   const allFilms = [];
-  const cleanUrl = baseTarget.replace(/\/$/, '');
-
-  for (let page = 1; page <= maxPages; page++) {
-    const pageUrl = page > 1 ? `${cleanUrl}/page/${page}/` : `${cleanUrl}/`;
-    try {
-      const res = await fetch(pageUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.9'
-        },
-        signal: AbortSignal.timeout(10000)
-      });
-
-      if (!res.ok) break;
+  try {
+    const res = await fetch(baseTarget, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+      },
+      signal: AbortSignal.timeout(8000)
+    });
+    if (res.ok) {
       const html = await res.text();
-
-      // Extract data-item-name="Title (Year)"
       const matches = [...html.matchAll(/data-item-name=\"([^\"]+)\"/g)].map(m => m[1]);
-
-      if (matches && matches.length > 0) {
-        for (const raw of matches) {
-          const yearMatch = raw.match(/\((\d{4})\)$/);
-          const year = yearMatch ? yearMatch[1] : null;
-          const title = raw.replace(/\s*\(\d{4}\)$/, '').trim();
-          if (title) {
-            allFilms.push({ title, year });
-          }
-        }
-      } else {
-        // Fallback to poster alt attributes
-        const altMatches = [...html.matchAll(/class=\"[^\"]*film-poster[^\"]*\"[^>]*alt=\"([^\"]+)\"/g)].map(m => m[1]);
-        if (altMatches && altMatches.length > 0) {
-          for (const raw of altMatches) {
-            const yearMatch = raw.match(/\((\d{4})\)$/);
-            const year = yearMatch ? yearMatch[1] : null;
-            const title = raw.replace(/\s*\(\d{4}\)$/, '').trim();
-            if (title) {
-              allFilms.push({ title, year });
-            }
-          }
-        }
-        break;
+      for (const raw of matches) {
+        const yearMatch = raw.match(/\((\d{4})\)$/);
+        const year = yearMatch ? yearMatch[1] : null;
+        const title = raw.replace(/\s*\(\d{4}\)$/, '').trim();
+        if (title) allFilms.push({ title, year });
       }
-    } catch (e) {
-      break;
     }
-  }
+  } catch (e) {}
 
   return allFilms;
 }
@@ -416,7 +414,7 @@ function getManifest(config) {
   return {
     id: 'community.cinepilot.studio',
     name: 'CinePilot Studio',
-    version: '5.4.0',
+    version: '5.5.0',
     description: 'Modüler Stremio Katalog Oluşturucu, Trendler, Oscar, Top 250, Özel Letterboxd / TMDB / Trakt Listeleri ve Fragmanlar.',
     resources: ['catalog', 'meta', 'stream'],
     types: ['movie', 'series'],
@@ -525,11 +523,12 @@ async function searchTmdb(title, year = null, type = 'movie') {
   }
 }
 
-// Convert Scraped List to Metas concurrently
+// Convert Scraped List to Metas concurrently (Fast batching)
 async function resolveScrapedListToMetas(scrapedList, type = 'movie', rpdbKey = '') {
   const endpointType = type === 'series' ? 'tv' : 'movie';
+  const targetItems = scrapedList.slice(0, 150); // Fast load for top 150 items
 
-  const promises = scrapedList.map(async (item) => {
+  const promises = targetItems.map(async (item) => {
     try {
       let details = null;
       let searchedId = item.tmdbId;
@@ -684,7 +683,7 @@ app.get('/api/validate-list', async (req, res) => {
   }
 
   try {
-    const items = await scrapeUniversalList(url, 2);
+    const items = await scrapeUniversalList(url);
     if (items.length > 0) {
       return res.json({ valid: true, count: items.length, sample: items.slice(0, 3).map(i => i.title) });
     } else {
@@ -775,7 +774,7 @@ app.get([
 
     // 3. OSCAR ÖDÜLLÜ FİLMLER (~96)
     else if (id === 'oscar_collection') {
-      const cacheKey = `full_oscar_v14_${config.rpdbKey || 'no_rpdb'}`;
+      const cacheKey = `full_oscar_v15_${config.rpdbKey || 'no_rpdb'}`;
       metas = getCache(cacheKey);
       if (!metas) {
         metas = await resolveImdbList(curatedData.oscar, 'movie', config.rpdbKey);
@@ -785,7 +784,7 @@ app.get([
 
     // 4. TOP 250 MOVIES (~98)
     else if (id === 'top250_collection') {
-      const cacheKey = `full_top250_v14_${config.rpdbKey || 'no_rpdb'}`;
+      const cacheKey = `full_top250_v15_${config.rpdbKey || 'no_rpdb'}`;
       metas = getCache(cacheKey);
       if (!metas) {
         metas = await resolveImdbList(curatedData.top250, 'movie', config.rpdbKey);
@@ -1004,7 +1003,7 @@ app.get(['/stream/:type/:id.json', '/:config/stream/:type/:id.json'], async (req
 
 app.listen(PORT, '0.0.0.0', () => {
   const ip = getLocalIp();
-  console.log(`🚀 CinePilot Studio v5.4.0 running on http://127.0.0.1:${PORT}`);
+  console.log(`🚀 CinePilot Studio v5.5.0 running on http://127.0.0.1:${PORT}`);
   console.log(`📡 Local Network URL: http://${ip}:${PORT}`);
   console.log(`⚙️ Web Configurator: http://127.0.0.1:${PORT}/configure`);
 });

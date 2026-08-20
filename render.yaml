@@ -3,7 +3,7 @@ services:
     name: cinepilot
     env: node
     plan: free
-    buildCommand: npm install
+    buildCommand: npm install && (pip3 install cloudscraper beautifulsoup4 requests || pip install cloudscraper beautifulsoup4 requests || true)
     startCommand: node server.js
     autoDeploy: true
     envVars:
@@ -11,3 +11,5 @@ services:
         value: 7050
       - key: NODE_ENV
         value: production
+      - key: TMDB_API_KEY
+        value: caad8d4dace6ad77f0e22f5b746d5a20
