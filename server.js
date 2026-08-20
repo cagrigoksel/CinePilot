@@ -598,10 +598,15 @@ function getManifest(config) {
     name: 'CinePilot Studio',
     version: '6.2.0',
     description: t.desc,
+    logo: 'https://images.metahub.space/logo/medium/stremio.png',
     resources: ['catalog', 'meta', 'stream'],
     types: ['movie', 'series'],
     catalogs: catalogs,
-    idPrefixes: ['tt', 'tmdb:']
+    idPrefixes: ['tt', 'tmdb:'],
+    behaviorHints: {
+      configurable: true,
+      configurationRequired: false
+    }
   };
 }
 
