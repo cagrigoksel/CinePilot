@@ -320,7 +320,7 @@ function getPosterUrl(imdbId, tmdbPosterPath, rpdbKey = '') {
 function runPythonScraper(target) {
   return new Promise((resolve) => {
     const scriptPath = path.join(__dirname, 'list_scraper.py');
-    const py = spawn('python3', [scriptPath, target], { timeout: 35000 });
+    const py = spawn('python3', [scriptPath, target], { timeout: 60000 });
 
     let output = '';
     py.stdout.on('data', (d) => { output += d.toString(); });
