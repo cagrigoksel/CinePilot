@@ -10,6 +10,9 @@ const PORT = process.env.PORT || 7050;
 
 const TMDB_API_KEY = 'caad8d4dace6ad77f0e22f5b746d5a20';
 
+// Load Curated Lists
+const curatedData = JSON.parse(fs.readFileSync(path.join(__dirname, 'curated_lists.json'), 'utf8'));
+
 // Cache memory
 const cache = new Map();
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
@@ -54,6 +57,8 @@ function parseConfig(configStr) {
   const defaults = {
     enableTrendingMovies: true,
     enableTrendingSeries: true,
+    enableOscar: true,
+    enableTop250: true,
     enableTrailers: true,
     rpdbKey: '',
     letterboxdUser: '',
@@ -73,7 +78,7 @@ function parseConfig(configStr) {
   }
 }
 
-// ONLY Pure Genres in dropdowns
+// Pure Genres
 const PURE_MOVIE_GENRES = [
   "Tümü",
   "Aksiyon",
@@ -187,7 +192,6 @@ function matchesGenre(itemGenres, selectedGenre) {
   });
 }
 
-// Poster URL Generator with User's Own RPDB Key or TMDB Fallback
 function getPosterUrl(imdbId, tmdbPosterPath, rpdbKey = '') {
   if (rpdbKey && rpdbKey.trim() !== '' && imdbId && imdbId.startsWith('tt')) {
     return `https://api.ratingposterdb.com/${rpdbKey.trim()}/imdb/poster-default/${imdbId}.jpg`;
@@ -199,13 +203,13 @@ function getPosterUrl(imdbId, tmdbPosterPath, rpdbKey = '') {
 }
 
 // -------------------------------------------------------------
-// Manifest Builder (Modular & Dynamic)
+// Manifest Builder
 // -------------------------------------------------------------
 
 function getManifest(config) {
   const catalogs = [];
 
-  // 1. Default Template: Haftalık Trend Filmler (if enabled)
+  // 1. Haftalık Trend Filmler
   if (config.enableTrendingMovies !== false) {
     catalogs.push({
       id: 'trending_movies',
@@ -219,7 +223,7 @@ function getManifest(config) {
     });
   }
 
-  // 2. Default Template: Haftalık Trend Diziler (if enabled)
+  // 2. Haftalık Trend Diziler
   if (config.enableTrendingSeries !== false) {
     catalogs.push({
       id: 'trending_series',
@@ -233,7 +237,27 @@ function getManifest(config) {
     });
   }
 
-  // 3. User Defined Custom Lists
+  // 3. Oscar Ödüllü Filmler
+  if (config.enableOscar !== false) {
+    catalogs.push({
+      id: 'oscar_collection',
+      type: 'movie',
+      name: `✨ Oscar Ödüllü Filmler`,
+      extra: [{ name: 'genre', isRequired: false, options: PURE_MOVIE_GENRES }, { name: 'skip', isRequired: false }]
+    });
+  }
+
+  // 4. IMDb & Letterboxd Top 250
+  if (config.enableTop250 !== false) {
+    catalogs.push({
+      id: 'top250_collection',
+      type: 'movie',
+      name: `🏆 IMDb Top 250`,
+      extra: [{ name: 'genre', isRequired: false, options: PURE_MOVIE_GENRES }, { name: 'skip', isRequired: false }]
+    });
+  }
+
+  // 5. User Defined Custom Lists (Letterboxd / Trakt)
   if (Array.isArray(config.customLists)) {
     config.customLists.forEach((list, idx) => {
       const type = list.type === 'series' ? 'series' : 'movie';
@@ -250,7 +274,7 @@ function getManifest(config) {
     });
   }
 
-  // 4. Optional Personal Letterboxd (if username provided)
+  // 6. Optional Personal Letterboxd
   if (config.letterboxdUser && config.letterboxdUser.trim() !== '') {
     const user = config.letterboxdUser.trim();
     catalogs.push({
@@ -269,9 +293,9 @@ function getManifest(config) {
 
   return {
     id: 'community.cinepilot.studio',
-    name: 'CinePilot — Custom Cinema Suite',
-    version: '5.0.0',
-    description: 'Modüler ve Kişiselleştirilebilir Stremio Katalog Oluşturucu, 100+ Trendler, Özel Letterboxd/Trakt Listeleri ve 4K Fragmanlar.',
+    name: 'CinePilot Studio',
+    version: '5.1.0',
+    description: 'Modüler Stremio Katalog Oluşturucu, Trendler, Oscar, Top 250, Özel Letterboxd Listeleri ve Fragmanlar.',
     resources: ['catalog', 'meta', 'stream'],
     types: ['movie', 'series'],
     catalogs: catalogs,
@@ -398,7 +422,7 @@ function scrapeUniversalList(urlOrUser, mode = 'letterboxd') {
   });
 }
 
-// Convert Scraped Film List (title, year) to Stremio Metas concurrently
+// Convert Scraped List to Metas concurrently
 async function resolveScrapedListToMetas(scrapedList, type = 'movie', rpdbKey = '') {
   const endpointType = type === 'series' ? 'tv' : 'movie';
 
@@ -417,6 +441,37 @@ async function resolveScrapedListToMetas(scrapedList, type = 'movie', rpdbKey = 
           description: searched.overview,
           genres: genres,
           releaseInfo: item.year || (searched.release_date || searched.first_air_date || '').split('-')[0]
+        };
+      }
+    } catch (e) {}
+    return null;
+  });
+
+  const results = await Promise.all(promises);
+  return results.filter(Boolean);
+}
+
+// Convert Curated IMDb ID List to Metas concurrently
+async function resolveImdbList(imdbIds, type = 'movie', rpdbKey = '') {
+  const promises = imdbIds.map(async (imdbId) => {
+    try {
+      let found = null;
+      if (imdbId.startsWith('tmdb:')) {
+        const tmdbId = imdbId.split(':')[1];
+        found = await fetchTmdbDetails(tmdbId, type === 'series' ? 'tv' : 'movie');
+      } else {
+        found = await findTmdbByImdb(imdbId);
+      }
+      if (found) {
+        const genres = extractGenres(found);
+        return {
+          id: imdbId,
+          type: type,
+          name: found.title || found.name,
+          poster: getPosterUrl(imdbId, found.poster_path, rpdbKey),
+          description: found.overview,
+          genres: genres,
+          releaseInfo: (found.release_date || found.first_air_date || '').split('-')[0]
         };
       }
     } catch (e) {}
@@ -549,19 +604,39 @@ app.get([
       return res.json({ metas });
     }
 
-    // 1. HAFTALIK TREND FİLMLER (100+ with Genre Support)
+    // 1. HAFTALIK TREND FİLMLER
     if (id === 'trending_movies') {
       metas = await fetchTrending100('movie', config.rpdbKey, selectedGenre);
       return res.json({ metas });
     }
 
-    // 2. HAFTALIK TREND DİZİLER (100+ with Genre Support)
+    // 2. HAFTALIK TREND DİZİLER
     else if (id === 'trending_series') {
       metas = await fetchTrending100('series', config.rpdbKey, selectedGenre);
       return res.json({ metas });
     }
 
-    // 3. USER DEFINED CUSTOM LISTS (e.g. custom_0, custom_1)
+    // 3. OSCAR ÖDÜLLÜ FİLMLER (~96)
+    else if (id === 'oscar_collection') {
+      const cacheKey = `full_oscar_v10_${config.rpdbKey || 'no_rpdb'}`;
+      metas = getCache(cacheKey);
+      if (!metas) {
+        metas = await resolveImdbList(curatedData.oscar, 'movie', config.rpdbKey);
+        setCache(cacheKey, metas, 24 * 60 * 60 * 1000);
+      }
+    }
+
+    // 4. TOP 250 MOVIES (~98)
+    else if (id === 'top250_collection') {
+      const cacheKey = `full_top250_v10_${config.rpdbKey || 'no_rpdb'}`;
+      metas = getCache(cacheKey);
+      if (!metas) {
+        metas = await resolveImdbList(curatedData.top250, 'movie', config.rpdbKey);
+        setCache(cacheKey, metas, 24 * 60 * 60 * 1000);
+      }
+    }
+
+    // 5. USER DEFINED CUSTOM LISTS (e.g. custom_0, custom_1)
     else if (id.startsWith('custom_')) {
       const idx = parseInt(id.split('_')[1], 10);
       const customList = config.customLists && config.customLists[idx];
@@ -578,7 +653,7 @@ app.get([
       }
     }
 
-    // 4. WATCHLIST (Letterboxd)
+    // 6. WATCHLIST (Letterboxd)
     else if (id === 'my_watchlist' && config.letterboxdUser) {
       const cacheKey = `user_wl_${config.letterboxdUser}_${config.rpdbKey || 'no_rpdb'}`;
       metas = getCache(cacheKey);
@@ -589,7 +664,7 @@ app.get([
       }
     }
 
-    // 5. DIARY (Letterboxd)
+    // 7. DIARY (Letterboxd)
     else if (id === 'my_diary' && config.letterboxdUser) {
       const cacheKey = `user_diary_${config.letterboxdUser}_${config.rpdbKey || 'no_rpdb'}`;
       metas = getCache(cacheKey);
@@ -612,7 +687,7 @@ app.get([
   }
 });
 
-// Meta Endpoint (Rich Details + Dynamic Episode Tree with Thumbnails)
+// Meta Endpoint
 app.get(['/meta/:type/:id.json', '/:config/meta/:type/:id.json'], async (req, res) => {
   const config = parseConfig(req.params.config);
   const type = req.params.type;
@@ -715,7 +790,7 @@ app.get(['/meta/:type/:id.json', '/:config/meta/:type/:id.json'], async (req, re
   }
 });
 
-// Stream Endpoint: Official 4K / HD Trailers Only (No full episode YouTube streams)
+// Stream Endpoint: Official 4K / HD Trailers Only
 app.get(['/stream/:type/:id.json', '/:config/stream/:type/:id.json'], async (req, res) => {
   const config = parseConfig(req.params.config);
   const type = req.params.type;
@@ -761,7 +836,7 @@ app.get(['/stream/:type/:id.json', '/:config/stream/:type/:id.json'], async (req
 
 app.listen(PORT, '0.0.0.0', () => {
   const ip = getLocalIp();
-  console.log(`🚀 CinePilot v5.0.0 [Community Studio] running on http://127.0.0.1:${PORT}`);
+  console.log(`🚀 CinePilot Studio v5.1.0 running on http://127.0.0.1:${PORT}`);
   console.log(`📡 Local Network URL: http://${ip}:${PORT}`);
   console.log(`⚙️ Web Configurator: http://127.0.0.1:${PORT}/configure`);
 });

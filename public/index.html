@@ -3,19 +3,17 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CinePilot Studio — Stremio Kişisel Katalog Oluşturucu</title>
+  <title>CinePilot Studio</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
       --bg: #090b10;
-      --card-bg: rgba(22, 27, 34, 0.8);
+      --card-bg: rgba(22, 27, 34, 0.85);
       --border: rgba(255, 255, 255, 0.1);
-      --border-focus: #7a5af8;
       --primary: #7a5af8;
       --primary-hover: #9373f9;
-      --accent: #00d26a;
       --accent-danger: #f85149;
       --text: #f0f6fc;
       --text-muted: #8b949e;
@@ -35,84 +33,94 @@
 
     .container {
       width: 100%;
-      max-width: 640px;
+      max-width: 580px;
       background: var(--card-bg);
       backdrop-filter: blur(20px);
       -webkit-backdrop-filter: blur(20px);
       border: 1px solid var(--border);
-      border-radius: 24px;
-      padding: 36px;
+      border-radius: 20px;
+      padding: 32px;
       box-shadow: 0 24px 60px rgba(0,0,0,0.7);
     }
 
-    .header { text-align: center; margin-bottom: 28px; }
-    .badge {
-      display: inline-block;
-      padding: 5px 14px;
-      background: rgba(122, 90, 248, 0.15);
-      color: var(--primary-hover);
-      border: 1px solid rgba(122, 90, 248, 0.3);
-      border-radius: 100px;
-      font-size: 0.75rem;
-      font-weight: 700;
-      letter-spacing: 1px;
-      text-transform: uppercase;
-      margin-bottom: 12px;
-    }
-
-    h1 { font-size: 2rem; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 6px; }
-    p.subtitle { color: var(--text-muted); font-size: 0.95rem; }
+    .header { text-align: center; margin-bottom: 24px; }
+    h1 { font-size: 2.1rem; font-weight: 800; letter-spacing: -0.5px; }
 
     .section-title {
-      font-size: 1.05rem;
+      font-size: 0.95rem;
       font-weight: 700;
-      margin: 24px 0 12px 0;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      color: var(--text);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      margin: 22px 0 10px 0;
     }
 
-    .checkbox-group {
+    /* Switch Component */
+    .switch-row {
       display: flex;
       align-items: center;
-      gap: 12px;
-      padding: 12px 16px;
+      justify-content: space-between;
+      padding: 12px 14px;
       background: rgba(13, 17, 23, 0.5);
       border: 1px solid var(--border);
       border-radius: 12px;
-      margin-bottom: 10px;
-      cursor: pointer;
-      transition: border-color 0.2s, background 0.2s;
+      margin-bottom: 8px;
     }
-    .checkbox-group:hover { border-color: rgba(255, 255, 255, 0.2); background: rgba(13, 17, 23, 0.7); }
-    .checkbox-group input { width: 18px; height: 18px; accent-color: var(--primary); }
-    .checkbox-group label { margin-bottom: 0; font-weight: 500; cursor: pointer; flex: 1; font-size: 0.92rem; }
+    .switch-label { font-size: 0.92rem; font-weight: 600; }
 
-    /* Custom List Card */
-    .custom-list-builder {
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 44px;
+      height: 24px;
+    }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: rgba(255, 255, 255, 0.15);
+      transition: .3s;
+      border-radius: 24px;
+    }
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .3s;
+      border-radius: 50%;
+    }
+    input:checked + .slider { background-color: var(--primary); }
+    input:checked + .slider:before { transform: translateX(20px); }
+
+    /* Custom List Card Builder */
+    .custom-list-box {
       background: rgba(13, 17, 23, 0.6);
       border: 1px dashed rgba(255, 255, 255, 0.15);
       border-radius: 14px;
-      padding: 18px;
-      margin-bottom: 16px;
+      padding: 16px;
+      margin-bottom: 12px;
     }
 
-    .input-row {
+    .input-grid {
       display: grid;
       grid-template-columns: 2fr 1fr;
-      gap: 10px;
-      margin-bottom: 10px;
+      gap: 8px;
+      margin-bottom: 8px;
     }
 
     input[type="text"], select {
       width: 100%;
-      padding: 12px 14px;
-      background: rgba(9, 11, 16, 0.8);
+      padding: 11px 14px;
+      background: rgba(9, 11, 16, 0.85);
       border: 1px solid var(--border);
       border-radius: 10px;
       color: #fff;
-      font-size: 0.9rem;
+      font-size: 0.88rem;
       outline: none;
       transition: border-color 0.2s;
     }
@@ -126,54 +134,53 @@
       color: #fff;
       border-radius: 10px;
       font-weight: 600;
-      font-size: 0.9rem;
+      font-size: 0.88rem;
       cursor: pointer;
       transition: background 0.2s;
     }
     .btn-add:hover { background: var(--primary); }
 
-    .list-items-container {
+    .list-container {
       display: flex;
       flex-direction: column;
-      gap: 8px;
-      margin-top: 12px;
+      gap: 6px;
+      margin-top: 10px;
     }
 
-    .list-item-card {
+    .list-card {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 10px 14px;
-      background: rgba(22, 27, 34, 0.9);
+      padding: 8px 12px;
+      background: rgba(22, 27, 34, 0.95);
       border: 1px solid var(--border);
-      border-radius: 10px;
-      font-size: 0.88rem;
+      border-radius: 8px;
+      font-size: 0.85rem;
     }
-    .list-item-info { display: flex; align-items: center; gap: 8px; overflow: hidden; }
-    .list-item-name { font-weight: 600; }
-    .list-item-type { font-size: 0.75rem; padding: 2px 6px; background: rgba(255,255,255,0.1); border-radius: 4px; }
-    .btn-delete {
+    .list-info { display: flex; align-items: center; gap: 8px; overflow: hidden; }
+    .list-name { font-weight: 600; }
+    .list-tag { font-size: 0.7rem; padding: 2px 6px; background: rgba(255,255,255,0.1); border-radius: 4px; }
+    .btn-del {
       background: none;
       border: none;
       color: var(--accent-danger);
       cursor: pointer;
-      font-size: 1rem;
-      padding: 4px;
+      font-size: 0.95rem;
+      padding: 2px 6px;
     }
 
-    .form-group { margin-bottom: 14px; }
-    label.input-label { display: block; font-weight: 600; font-size: 0.88rem; margin-bottom: 6px; color: var(--text); }
-    .hint { font-size: 0.78rem; color: var(--text-muted); margin-top: 4px; }
+    .form-group { margin-bottom: 12px; }
+    label.field-label { display: block; font-weight: 600; font-size: 0.85rem; margin-bottom: 6px; color: var(--text); }
 
-    .btn-container { display: flex; flex-direction: column; gap: 10px; margin-top: 26px; }
+    .btn-container { display: flex; flex-direction: column; gap: 8px; margin-top: 24px; }
 
     .btn {
       width: 100%;
-      padding: 14px;
+      padding: 13px;
       border: none;
       border-radius: 12px;
       font-weight: 700;
-      font-size: 1rem;
+      font-size: 0.95rem;
       cursor: pointer;
       display: flex;
       justify-content: center;
@@ -189,12 +196,12 @@
     .btn-secondary:hover { background: rgba(255, 255, 255, 0.15); }
 
     .manifest-box {
-      margin-top: 16px;
-      padding: 12px;
+      margin-top: 14px;
+      padding: 10px;
       background: #0d1117;
       border-radius: 8px;
       font-family: monospace;
-      font-size: 0.78rem;
+      font-size: 0.75rem;
       color: #58a6ff;
       word-break: break-all;
       border: 1px solid #30363d;
@@ -206,60 +213,82 @@
 
   <div class="container">
     <div class="header">
-      <div class="badge">✨ MODÜLER KATALOG STÜDYOSU v5.0</div>
       <h1>CinePilot Studio</h1>
-      <p class="subtitle">Stremio İçin Kişisel Liste & Akış Oluşturucu</p>
     </div>
 
-    <!-- 1. Varsayılan Şablonlar -->
-    <div class="section-title">🔥 1. Varsayılan Trend Katalogları</div>
-    <div class="checkbox-group">
-      <input type="checkbox" id="enableTrendingMovies" checked>
-      <label for="enableTrendingMovies">🎬 Haftalık Trend Filmler (100+ Film - Otomatik Güncellenen)</label>
+    <!-- 1. Küratörlük Listeleri (4 Switch) -->
+    <div class="section-title">Kataloglar</div>
+    
+    <div class="switch-row">
+      <span class="switch-label">🔥 Trending Movies</span>
+      <label class="switch">
+        <input type="checkbox" id="enableTrendingMovies" checked>
+        <span class="slider"></span>
+      </label>
     </div>
-    <div class="checkbox-group">
-      <input type="checkbox" id="enableTrendingSeries" checked>
-      <label for="enableTrendingSeries">📺 Haftalık Trend Diziler (100+ Dizi - Otomatik Güncellenen)</label>
+
+    <div class="switch-row">
+      <span class="switch-label">📺 Trending Series</span>
+      <label class="switch">
+        <input type="checkbox" id="enableTrendingSeries" checked>
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <div class="switch-row">
+      <span class="switch-label">✨ Oscar Collection</span>
+      <label class="switch">
+        <input type="checkbox" id="enableOscar" checked>
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <div class="switch-row">
+      <span class="switch-label">🏆 Top 250 Movies</span>
+      <label class="switch">
+        <input type="checkbox" id="enableTop250" checked>
+        <span class="slider"></span>
+      </label>
     </div>
 
     <!-- 2. Özel Liste Ekleme -->
-    <div class="section-title">📋 2. Özel Liste Ekle (Letterboxd / Trakt)</div>
-    <div class="custom-list-builder">
-      <div class="input-row">
-        <input type="text" id="newListTitle" placeholder="Liste Başlığı (Örn: 🧠 Zihin Yakan Filmler)">
+    <div class="section-title">Özel Liste Ekle</div>
+    <div class="custom-list-box">
+      <div class="input-grid">
+        <input type="text" id="newListTitle" placeholder="Liste Başlığı">
         <select id="newListType">
           <option value="movie">Film</option>
           <option value="series">Dizi</option>
         </select>
       </div>
-      <input type="text" id="newListUrl" placeholder="Liste Linki (Örn: https://letterboxd.com/.../list/...)" style="margin-bottom: 10px;">
-      <button type="button" class="btn-add" id="addListBtn">+ Özel Listeyi Kataloğa Ekle</button>
+      <input type="text" id="newListUrl" placeholder="Letterboxd veya Trakt Liste Linki" style="margin-bottom: 8px;">
+      <button type="button" class="btn-add" id="addListBtn">+ Listeyi Ekle</button>
 
-      <div class="list-items-container" id="customListsContainer">
-        <!-- Dynamic list items will appear here -->
-      </div>
+      <div class="list-container" id="customListsContainer"></div>
     </div>
 
-    <!-- 3. Kişisel Ayarlar & RPDB -->
-    <div class="section-title">⚙️ 3. Kişisel Ayarlar & Afişler</div>
+    <!-- 3. Ayarlar & API Anahtarları -->
+    <div class="section-title">Ayarlar</div>
+    
     <div class="form-group">
-      <label class="input-label">⭐ RPDB API Key (İsteğe Bağlı)</label>
-      <input type="text" id="rpdbKey" placeholder="Kendi RPDB Key'inizi girin (boş bırakılırsa standart afiş kullanılır)">
-      <div class="hint">Afişlerin üzerine IMDb, Letterboxd ve RottenTomatoes puan rozetleri ekler.</div>
+      <label class="field-label">RPDB API Key</label>
+      <input type="text" id="rpdbKey" placeholder="RPDB API Key (İsteğe bağlı)">
     </div>
 
     <div class="form-group">
-      <label class="input-label">👤 Letterboxd Kullanıcı Adı (İsteğe Bağlı)</label>
-      <input type="text" id="letterboxdUser" placeholder="Örn: cagrigoksel">
-      <div class="hint">Kişisel izleme listeniz ve son izledikleriniz Keşfet sekmesine bağlanır.</div>
+      <label class="field-label">Letterboxd Kullanıcı Adı</label>
+      <input type="text" id="letterboxdUser" placeholder="Kullanıcı Adı (İsteğe bağlı)">
     </div>
 
-    <div class="checkbox-group">
-      <input type="checkbox" id="enableTrailers" checked>
-      <label for="enableTrailers">🎬 Resmi 4K / HD YouTube Fragmanları</label>
+    <div class="switch-row">
+      <span class="switch-label">🎬 Trailers</span>
+      <label class="switch">
+        <input type="checkbox" id="enableTrailers" checked>
+        <span class="slider"></span>
+      </label>
     </div>
 
-    <!-- 4. Yükleme ve Paylaşım -->
+    <!-- 4. Yükleme -->
     <div class="btn-container">
       <a href="#" id="installBtn" class="btn btn-primary">🚀 Stremio'ya Yükle</a>
       <button type="button" id="copyBtn" class="btn btn-secondary">📋 Manifest Linkini Kopyala</button>
@@ -276,19 +305,19 @@
       container.innerHTML = '';
 
       if (customLists.length === 0) {
-        container.innerHTML = '<div style="font-size:0.8rem; color:var(--text-muted); text-align:center; padding:6px;">Henüz özel bir liste eklemediniz.</div>';
+        container.innerHTML = '<div style="font-size:0.78rem; color:var(--text-muted); text-align:center; padding:4px;">Henüz özel bir liste eklenmedi.</div>';
         return;
       }
 
       customLists.forEach((list, idx) => {
         const div = document.createElement('div');
-        div.className = 'list-item-card';
+        div.className = 'list-card';
         div.innerHTML = `
-          <div class="list-item-info">
-            <span class="list-item-type">${list.type === 'series' ? 'DİZİ' : 'FİLM'}</span>
-            <span class="list-item-name">${escapeHtml(list.name)}</span>
+          <div class="list-info">
+            <span class="list-tag">${list.type === 'series' ? 'DİZİ' : 'FİLM'}</span>
+            <span class="list-name">${escapeHtml(list.name)}</span>
           </div>
-          <button type="button" class="btn-delete" onclick="removeCustomList(${idx})">✕</button>
+          <button type="button" class="btn-del" onclick="removeCustomList(${idx})">✕</button>
         `;
         container.appendChild(div);
       });
@@ -308,7 +337,7 @@
       const url = urlInput.value.trim();
 
       if (!name || !url) {
-        alert('Lütfen liste başlığı ve geçerli bir liste bağlantısı girin.');
+        alert('Lütfen liste başlığı ve geçerli bir liste linki girin.');
         return;
       }
 
@@ -329,6 +358,8 @@
     function updateUrls() {
       const enableTrendingMovies = document.getElementById('enableTrendingMovies').checked;
       const enableTrendingSeries = document.getElementById('enableTrendingSeries').checked;
+      const enableOscar = document.getElementById('enableOscar').checked;
+      const enableTop250 = document.getElementById('enableTop250').checked;
       const enableTrailers = document.getElementById('enableTrailers').checked;
       const rpdbKey = document.getElementById('rpdbKey').value.trim();
       const letterboxdUser = document.getElementById('letterboxdUser').value.trim();
@@ -336,6 +367,8 @@
       const configObj = {
         enableTrendingMovies,
         enableTrendingSeries,
+        enableOscar,
+        enableTop250,
         enableTrailers,
         rpdbKey,
         letterboxdUser,
