@@ -1222,9 +1222,13 @@ app.get(['/stream/:type/:id.json', '/:config/stream/:type/:id.json'], async (req
   }
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  const ip = getLocalIp();
-  console.log(`🚀 CinePilot Studio v6.2.0 [Parallel Got-Scraper Engine] running on http://127.0.0.1:${PORT}`);
-  console.log(`📡 Local Network URL: http://${ip}:${PORT}`);
-  console.log(`⚙️ Web Configurator: http://127.0.0.1:${PORT}/configure`);
-});
+if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+  app.listen(PORT, '0.0.0.0', () => {
+    const ip = getLocalIp();
+    console.log(`🚀 CinePilot Studio v6.2.0 [Parallel Got-Scraper Engine] running on http://127.0.0.1:${PORT}`);
+    console.log(`📡 Local Network URL: http://${ip}:${PORT}`);
+    console.log(`⚙️ Web Configurator: http://127.0.0.1:${PORT}/configure`);
+  });
+}
+
+module.exports = app;

@@ -4,8 +4,7 @@
   "description": "CinePilot Studio Stremio Addon",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "postinstall": "pip3 install --break-system-packages cloudscraper beautifulsoup4 requests || pip install cloudscraper beautifulsoup4 requests || true"
+    "start": "node server.js"
   },
   "keywords": [],
   "type": "commonjs",
