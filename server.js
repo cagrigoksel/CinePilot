@@ -62,6 +62,43 @@ function decodeHtmlEntities(str) {
     .replace(/&gt;/g, '>');
 }
 
+function formatReleaseDate(rawDate, langLocale = 'tr-TR') {
+  if (!rawDate) return '';
+  const str = String(rawDate).trim();
+  if (!str) return '';
+
+  if (/^\d{4}$/.test(str)) return str;
+
+  const match = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) {
+    const [_, y, m, d] = match;
+    const dateObj = new Date(Date.UTC(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10)));
+    if (!isNaN(dateObj.getTime())) {
+      return dateObj.toLocaleDateString(langLocale, {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+        timeZone: 'UTC'
+      });
+    }
+  }
+
+  const ymMatch = str.match(/^(\d{4})-(\d{2})/);
+  if (ymMatch) {
+    const [_, y, m] = ymMatch;
+    const dateObj = new Date(Date.UTC(parseInt(y, 10), parseInt(m, 10) - 1, 1));
+    if (!isNaN(dateObj.getTime())) {
+      return dateObj.toLocaleDateString(langLocale, {
+        month: 'long',
+        year: 'numeric',
+        timeZone: 'UTC'
+      });
+    }
+  }
+
+  return str.split('-')[0] || str;
+}
+
 function parseConfig(configStr) {
   const defaults = {
     lang: 'tr',
@@ -458,6 +495,7 @@ async function scrapeUniversalList(urlOrUser, langLocale = 'tr-TR') {
           return res.items.map(i => ({
             title: decodeHtmlEntities(i.title || i.name),
             year: (i.release_date || i.first_air_date || '').split('-')[0],
+            release_date: i.release_date || i.first_air_date || '',
             tmdbId: i.id,
             type: i.media_type || (i.title ? 'movie' : 'series')
           }));
@@ -471,6 +509,7 @@ async function scrapeUniversalList(urlOrUser, langLocale = 'tr-TR') {
           return res.parts.map(i => ({
             title: decodeHtmlEntities(i.title),
             year: (i.release_date || '').split('-')[0],
+            release_date: i.release_date || '',
             tmdbId: i.id,
             type: 'movie'
           }));
@@ -596,7 +635,7 @@ function getManifest(config) {
   return {
     id: 'community.cinepilot.studio',
     name: 'CinePilot Studio',
-    version: '6.2.0',
+    version: '6.3.0',
     description: t.desc,
     logo: 'https://images.metahub.space/logo/medium/stremio.png',
     resources: ['catalog', 'meta', 'stream'],
@@ -770,7 +809,7 @@ async function resolveScrapedListToMetas(scrapedList, type = 'movie', rpdbKey = 
             poster: getPosterUrl(imdbId, details.poster_path, rpdbKey),
             description: details.overview,
             genres: genres,
-            releaseInfo: item.year || (details.release_date || details.first_air_date || '').split('-')[0]
+            releaseInfo: formatReleaseDate(details.release_date || details.first_air_date || item.release_date || item.year, langLocale)
           };
         }
       } catch (e) {}
@@ -804,7 +843,7 @@ async function resolveImdbList(imdbIds, type = 'movie', rpdbKey = '', langLocale
           poster: getPosterUrl(imdbId, found.poster_path, rpdbKey),
           description: found.overview,
           genres: genres,
-          releaseInfo: (found.release_date || found.first_air_date || '').split('-')[0]
+          releaseInfo: formatReleaseDate(found.release_date || found.first_air_date, langLocale)
         };
       }
     } catch (e) {}
@@ -820,7 +859,7 @@ async function fetchTrending100(type = 'movie', rpdbKey = '', genreName = null, 
   const endpointType = type === 'series' ? 'tv' : 'movie';
   const genreId = genreName && genreName !== 'Tümü' ? TMDB_GENRE_MAP[genreName] : null;
 
-  const cacheKey = `trending_100_${type}_${genreName || 'all'}_${rpdbKey || 'no_rpdb'}_${langLocale}`;
+  const cacheKey = `trending_100_v3_${type}_${genreName || 'all'}_${rpdbKey || 'no_rpdb'}_${langLocale}`;
   const cached = getCache(cacheKey);
   if (cached) return cached;
 
@@ -854,7 +893,7 @@ async function fetchTrending100(type = 'movie', rpdbKey = '', genreName = null, 
         poster: getPosterUrl(imdbId, item.poster_path, rpdbKey),
         description: item.overview,
         genres: extractGenres(details),
-        releaseInfo: (item.release_date || item.first_air_date || '').split('-')[0]
+        releaseInfo: formatReleaseDate(item.release_date || item.first_air_date || details?.release_date || details?.first_air_date, langLocale)
       };
     } catch (e) {
       return null;
@@ -883,7 +922,7 @@ async function searchTmdbCatalog(query, type = 'movie', rpdbKey = '', langLocale
         poster: getPosterUrl(imdbId, item.poster_path, rpdbKey),
         description: item.overview,
         genres: extractGenres(details),
-        releaseInfo: (item.release_date || item.first_air_date || '').split('-')[0]
+        releaseInfo: formatReleaseDate(item.release_date || item.first_air_date || details?.release_date || details?.first_air_date, langLocale)
       });
     }
     return metas;
@@ -999,7 +1038,7 @@ app.get([
 
     // 3. OSCAR ÖDÜLLÜ FİLMLER (~96)
     else if (id === 'oscar_collection') {
-      const cacheKey = `full_oscar_v40_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
+      const cacheKey = `full_oscar_v41_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
       metas = getCache(cacheKey);
       if (!metas) {
         metas = await resolveImdbList(curatedData.oscar, 'movie', config.rpdbKey, langLocale);
@@ -1009,7 +1048,7 @@ app.get([
 
     // 4. TOP 250 MOVIES (~98)
     else if (id === 'top250_collection') {
-      const cacheKey = `full_top250_v40_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
+      const cacheKey = `full_top250_v41_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
       metas = getCache(cacheKey);
       if (!metas) {
         metas = await resolveImdbList(curatedData.top250, 'movie', config.rpdbKey, langLocale);
@@ -1023,7 +1062,7 @@ app.get([
       const customList = config.customLists && config.customLists[idx];
 
       if (customList && customList.url) {
-        const cacheKey = `custom_list_v40_${idx}_${encodeURIComponent(customList.url)}_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
+        const cacheKey = `custom_list_v41_${idx}_${encodeURIComponent(customList.url)}_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
         metas = getCache(cacheKey);
 
         if (!metas) {
@@ -1036,7 +1075,7 @@ app.get([
 
     // 6. WATCHLIST (Letterboxd)
     else if (id === 'my_watchlist' && config.letterboxdUser) {
-      const cacheKey = `user_wl_v40_${config.letterboxdUser}_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
+      const cacheKey = `user_wl_v41_${config.letterboxdUser}_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
       metas = getCache(cacheKey);
       if (!metas) {
         const scraped = await scrapeUniversalList(`https://letterboxd.com/${config.letterboxdUser}/watchlist/`, langLocale);
@@ -1047,7 +1086,7 @@ app.get([
 
     // 7. DIARY (Letterboxd)
     else if (id === 'my_diary' && config.letterboxdUser) {
-      const cacheKey = `user_diary_v40_${config.letterboxdUser}_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
+      const cacheKey = `user_diary_v41_${config.letterboxdUser}_${config.rpdbKey || 'no_rpdb'}_${langLocale}`;
       metas = getCache(cacheKey);
       if (!metas) {
         const scraped = await scrapeUniversalList(`https://letterboxd.com/${config.letterboxdUser}/films/`, langLocale);
@@ -1101,7 +1140,7 @@ app.get(['/meta/:type/:id.json', '/:config/meta/:type/:id.json'], async (req, re
     if (!tmdbData) return res.json({ meta: null });
 
     const title = tmdbData.title || tmdbData.name;
-    const releaseYear = (tmdbData.release_date || tmdbData.first_air_date || '').split('-')[0];
+    const releaseDateFormatted = formatReleaseDate(tmdbData.release_date || tmdbData.first_air_date, langLocale);
     const poster = getPosterUrl(imdbId, tmdbData.poster_path, config.rpdbKey);
     const background = tmdbData.backdrop_path ? `https://image.tmdb.org/t/p/original${tmdbData.backdrop_path}` : undefined;
 
@@ -1164,7 +1203,8 @@ app.get(['/meta/:type/:id.json', '/:config/meta/:type/:id.json'], async (req, re
         poster: poster,
         background: background,
         description: tmdbData.overview || 'Açıklama bulunamadı.',
-        releaseInfo: releaseYear,
+        releaseInfo: releaseDateFormatted,
+        released: (tmdbData.release_date || tmdbData.first_air_date) ? new Date(tmdbData.release_date || tmdbData.first_air_date).toISOString() : undefined,
         imdbRating: tmdbData.vote_average ? tmdbData.vote_average.toFixed(1) : undefined,
         runtime: tmdbData.runtime ? `${tmdbData.runtime} dk` : undefined,
         cast: cast,
@@ -1187,8 +1227,8 @@ app.get(['/stream/:type/:id.json', '/:config/stream/:type/:id.json'], async (req
   try {
     const streams = [];
 
-    // Official 4K / HD Trailers
-    if (config.enableTrailers !== false) {
+    // Official 4K / HD Trailers for ALL Movies & Series
+    if (config.enableTrailers) {
       let targetTmdbId = null;
       let targetType = type === 'series' ? 'tv' : 'movie';
 
@@ -1225,7 +1265,7 @@ app.get(['/stream/:type/:id.json', '/:config/stream/:type/:id.json'], async (req
 if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
   app.listen(PORT, '0.0.0.0', () => {
     const ip = getLocalIp();
-    console.log(`🚀 CinePilot Studio v6.2.0 [Parallel Got-Scraper Engine] running on http://127.0.0.1:${PORT}`);
+    console.log(`🚀 CinePilot Studio v6.3.0 [Parallel Got-Scraper Engine] running on http://127.0.0.1:${PORT}`);
     console.log(`📡 Local Network URL: http://${ip}:${PORT}`);
     console.log(`⚙️ Web Configurator: http://127.0.0.1:${PORT}/configure`);
   });
